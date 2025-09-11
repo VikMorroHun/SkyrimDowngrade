@@ -1,9 +1,10 @@
 #ifndef SKMAINWINDOW_H
 #define SKMAINWINDOW_H
-#define TESTMODE 0			// 0 - release, 1 - test mode, 2 - public beta test
+#define TESTMODE 0			// 0 - release, 1 - test mode, 2 - public beta test, 3 - copy files only
 
 #include "XMLReader.h"
 #include "subwindow.h"
+#include "workerthread.h"
 #include <QMainWindow>
 #include <QMenuBar>
 #include <QAction>
@@ -33,6 +34,7 @@ public:
 	void CopyFiles();
 	XMLReader * pXMLReader;
 	strucShared * pMainShared;
+	Controller * pThreadControl;
 
 private:
 	Ui::SKMainWindow *ui;
@@ -57,6 +59,7 @@ private:
 	void PrefetchAppName();
 	QString sDLParamConstruct( int );
 	void FinalizeDowngrade();
+	void FinalizeDowngrade2();
 
 private slots:
 	void on_ExitMenuClicked();

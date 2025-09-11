@@ -12,12 +12,14 @@ SOURCES += \
     XMLReader.cpp \
     main.cpp \
     skmainwindow.cpp \
-    subwindow.cpp
+    subwindow.cpp \
+    workerthread.cpp
 
 HEADERS += \
     XMLReader.h \
     skmainwindow.h \
-    subwindow.h
+    subwindow.h \
+    workerthread.h
 
 FORMS += \
     skmainwindow.ui \

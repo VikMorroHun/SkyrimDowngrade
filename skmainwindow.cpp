@@ -67,6 +67,16 @@ SKMainWindow::SKMainWindow(QWidget *parent)
 		fileMenu->addAction( exitAction );
 		connect( exitAction, &QAction::triggered, this, &SKMainWindow::on_ExitMenuClicked );	//https://doc.qt.io/qt-6/qtwidgets-mainwindows-menus-example.html
 	}
+	pThreadControl = new Controller();
+	if ( pThreadControl == NULL )
+		ui->textEdit->append( tr( "Warning!  ThreadControl pointer problem at startup!" ) );
+	else
+	{
+		connect( pThreadControl, &Controller::sendControllerStringBasic, this, &SKMainWindow::on_XMLReceiveStringBasic );
+		connect( pThreadControl, &Controller::sendWorkerFinishedSignal, this, &SKMainWindow::FinalizeDowngrade2 );
+		//pThreadControl->sendControllerStringBasic( "Controller Activated :)");
+	}
+
 	this->setWindowTitle("Skyrim Downgrade utility");
 	ui->pushButtonBrowse->setIcon( QIcon::fromTheme("system-file-manager") );
 	ui->pushButtonBrowse2->setIcon( QIcon::fromTheme("system-file-manager") );
@@ -143,6 +153,8 @@ SKMainWindow::~SKMainWindow()
 			pProcessDL->kill();
 		delete pProcessDL;
 	}
+	if ( pThreadControl != NULL )
+		delete pThreadControl;
 	if ( pSubwindow )
 		delete pSubwindow;
 	delete ui;
@@ -348,7 +360,27 @@ void SKMainWindow::GetDepotAndManifestIDs()
 //+------------------------------------------------------------------+
 void SKMainWindow::on_ExitMenuClicked()
 {
+	qint32 iRet;
+
 	//ui->statusbar->showMessage("Exit menu clicked.");
+	if ( pThreadControl != NULL )
+		if ( pThreadControl->bIsWorkerRunning() )
+		{
+			msgBox.setWindowTitle(tr("Question"));
+			msgBox.setText( tr("Work is in progress.") );
+			msgBox.setInformativeText( tr( "Are you sure you want to interrupt?" ) );
+			msgBox.setStandardButtons( QMessageBox::Ok | QMessageBox::Cancel );
+			msgBox.setDefaultButton( QMessageBox::Cancel );
+			iRet = msgBox.exec();
+			if ( iRet == QMessageBox::Ok )
+			{
+				pThreadControl->sendWorkerInterruptSignal();
+				return;											// let it finish
+				//ui->textEdit->append( tr("Uh-oh.  Thread is still running!") );
+			}
+			if ( iRet == QMessageBox::Cancel )
+				return;
+		}
 	if ( pProcessDL != NULL )
 	{
 		if ( pProcessDL->state() == QProcess::Running )
@@ -358,8 +390,8 @@ void SKMainWindow::on_ExitMenuClicked()
 			msgBox.setDetailedText( tr( "The process is still running." ) );
 			msgBox.setStandardButtons(QMessageBox::Ok | QMessageBox::Cancel);
 			msgBox.setDefaultButton(QMessageBox::Cancel);
-			int ret = msgBox.exec();
-			if ( ret == QMessageBox::Ok )
+			iRet = msgBox.exec();
+			if ( iRet == QMessageBox::Ok )
 			{
 				if ( pProcessDL->state() == QProcess::Running )
 					pProcessDL->close();				// close() and kill()
@@ -416,6 +448,26 @@ void SKMainWindow::on_comboBoxVersionActivated(int index)
 //+------------------------------------------------------------------+
 void SKMainWindow::on_pushButtonAbortClicked()
 {
+	qint32 iRet;
+
+	if ( pThreadControl != NULL )
+		if ( pThreadControl->bIsWorkerRunning() )
+		{
+			msgBox.setWindowTitle(tr("Question"));
+			msgBox.setText( tr("Work is in progress.") );
+			msgBox.setInformativeText( tr( "Are you sure you want to interrupt?" ) );
+			msgBox.setStandardButtons( QMessageBox::Ok | QMessageBox::Cancel );
+			msgBox.setDefaultButton( QMessageBox::Cancel );
+			iRet = msgBox.exec();
+			if ( iRet == QMessageBox::Ok )
+			{
+				pThreadControl->sendWorkerInterruptSignal();
+				ui->pushButtonAbort->setEnabled( false );
+				return;
+			}
+			if ( iRet == QMessageBox::Cancel )
+				return;
+		}
 	if ( pProcessDL == NULL )
 	{
 		ui->textEdit->append( tr("Process not available.") );
@@ -435,8 +487,8 @@ void SKMainWindow::on_pushButtonAbortClicked()
 		msgBox.setDetailedText( tr( "The process is still running." ) );
 		msgBox.setStandardButtons(QMessageBox::Ok | QMessageBox::Cancel);
 		msgBox.setDefaultButton(QMessageBox::Cancel);
-		int ret = msgBox.exec();
-		if ( ret == QMessageBox::Ok )
+		iRet = msgBox.exec();
+		if ( iRet == QMessageBox::Ok )
 		{
 			if ( !bAbortClickedOnce && pProcessDL->state() == QProcess::Running )
 				pProcessDL->write( "exit\n" );		//  >nul doesn't work
@@ -457,6 +509,7 @@ void SKMainWindow::on_pushButtonAbortClicked()
 void SKMainWindow::on_pushButtonBrowseClicked()
 {
 	QString sFileName;
+	qint32 i;
 
 	if ( !sGamePath.isEmpty() )
 		QDir::setCurrent( sGamePath );
@@ -466,6 +519,16 @@ void SKMainWindow::on_pushButtonBrowseClicked()
 		sFileName = QFileDialog::getOpenFileName(this, tr("Open Fallout 4 folder"), "", "Fallout4.exe");
 	if ( sFileName.isEmpty() )
 		return;
+	if ( !sFileName.endsWith('/') )
+	{
+		i = sFileName.lastIndexOf( "/" );
+		if ( i < 0 )
+		{
+			ui->textEdit->append( tr( "Something is wrong with the selected path." ) );
+			return;
+		}
+		sFileName.truncate( i + 1 );
+	}
 	sGamePath = sFileName;
 	ui->lineEditGamePath->setText( sGamePath );
 }
@@ -555,6 +618,12 @@ void SKMainWindow::on_pushButtonDownloadClicked()
 		fiList = dirDownload.entryInfoList( filters, QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot );
 		if ( !fiList.isEmpty() )
 		{
+			if ( TESTMODE == 3 )
+			{
+				ui->pushButtonAbort->setEnabled( true );
+				this->FinalizeDowngrade();
+				return;
+			}
 			msgBox.setWindowTitle(tr("Warning!  Download directory is not empty!"));
 			msgBox.setText( tr( "Would you like to delete the contents of directory %1?" ).arg( dirDownload.absolutePath() ) );
 			msgBox.setStandardButtons(QMessageBox::Ok | QMessageBox::Cancel);
@@ -565,14 +634,8 @@ void SKMainWindow::on_pushButtonDownloadClicked()
 				if ( !dirDownload.removeRecursively() )
 				{
 					ui->textEdit->append( tr( "Something went wrong.  Cannot delete directory %1. ").arg( dirDownload.absolutePath() ) );
-					return;
+					return;									// https://stackoverflow.com/questions/27758573/deleting-a-folder-and-all-its-contents-with-qt is better
 				}
-				/*for ( i = 0; i < fiList.size(); i++ )				// https://stackoverflow.com/questions/27758573/deleting-a-folder-and-all-its-contents-with-qt is better
-				{
-					qDebug() << "Deleting entry: " << fiList.at(i).absoluteFilePath();
-					pFile = new QFile( fiList.at(i).absoluteFilePath() );
-					etc.
-				}*/
 				if ( !dirDownload.exists() )
 					dirDownload.mkdir( dirDownload.absolutePath() );
 				ui->textEdit->append( tr("Directory %1 is now empty.").arg( dirDownload.absolutePath() ) );
@@ -816,7 +879,7 @@ void SKMainWindow::SetBrowseAction()
 //+------------------------------------------------------------------+
 void SKMainWindow::SetGameDefinitions()
 {
-	QString str, sSearchFor;
+	QString str, sSearchFor, sGameNameEmpty = "none";
 	qint32 i;
 	bool bFound = false;
 
@@ -837,7 +900,9 @@ void SKMainWindow::SetGameDefinitions()
 			}
 		if ( !TESTMODE && !bFound )
 		{
-			ui->textEdit->append( tr( "Error!  No match found for selected game '%1' in game definition files!").arg( ui->comboBoxGame->currentText() ) );
+			if ( ui->comboBoxGame->currentText().isEmpty() )
+				ui->textEdit->append( tr( "Error!  No match found for selected game '%1' in game definition files!").arg( sGameNameEmpty ) );
+			else ui->textEdit->append( tr( "Error!  No match found for selected game '%1' in game definition files!").arg( ui->comboBoxGame->currentText() ) );
 			return;
 		}
 		pXMLReader->ReadXMLSL( str, pMainShared, true );
@@ -975,7 +1040,25 @@ void SKMainWindow::FinalizeDowngrade()
 {
 	if ( pProcessDL->state() == QProcess::Running )
 		pProcessDL->write( "exit\n" );
-	this->CopyFiles();
+	if ( pThreadControl == NULL )
+	{
+		ui->textEdit->append( tr( "Warning!  ThreadControl pointer is NULL!  Copying files the old way (program will become unresponsive for a while)." ) );
+		this->CopyFiles();
+		this->DeleteFiles();
+		ui->textEdit->append( tr( "Downgrading finished.") );
+		return;
+	}
+	emit pThreadControl->sendWorkerStartSignal( ui->lineEditDownloadPath->text(), ui->lineEditGamePath->text() );
+}
+
+//+------------------------------------------------------------------+
+//| Downgrade cleanup, finishing moves part 2                        |
+//| INPUT: none                                                      |
+//| OUTPUT: none                                                     |
+//| REMARK: none                                                     |
+//+------------------------------------------------------------------+
+void SKMainWindow::FinalizeDowngrade2()
+{
 	this->DeleteFiles();
 	ui->textEdit->append( tr( "Downgrading finished.") );
 }

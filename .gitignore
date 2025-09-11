@@ -1,4 +1,5 @@
 # exclude files
+*.bak
 Downgrade_WIP.txt
 
 # exclude directories completely
