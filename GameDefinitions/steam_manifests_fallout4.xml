@@ -42,4 +42,61 @@
 		<Depot>435881</Depot>
 		<Manifest>1207717296920736193</Manifest>
 	</Version>
+	<Version ID = "1.11.191">
+		<Depot>377161</Depot>
+		<Manifest>5983086794954940044</Manifest>
+		<Depot>377163</Depot>
+		<Manifest>8360827888850301367</Manifest>
+		<Depot>377162</Depot>
+		<Manifest>5433405173062582852</Manifest>
+		<Depot>377164</Depot>
+		<Manifest>8492427313392140315</Manifest>
+		<Depot>435880</Depot>
+		<Manifest>7708996200055144433</Manifest>
+		<Depot>435870</Depot>
+		<Manifest>1213339795579796878</Manifest>
+		<Depot>435871</Depot>
+		<Manifest>471362073238143096</Manifest>
+		<!-- Far Harbor DLC and Manifest IDs -->
+		<Depot>435881</Depot>
+		<Manifest>1207717296920736193</Manifest>
+	</Version>
+	<Version ID = "1.11.221">
+		<Depot>377161</Depot>
+		<Manifest>5983086794954940044</Manifest>
+		<Depot>377163</Depot>
+		<Manifest>8363807899725426636</Manifest>
+		<Depot>377162</Depot>
+		<Manifest>387388833281246371</Manifest>
+		<Depot>377164</Depot>
+		<Manifest>8492427313392140315</Manifest>
+		<Depot>435880</Depot>
+		<Manifest>7797822138743384972</Manifest>
+		<Depot>435870</Depot>
+		<Manifest>1213339795579796878</Manifest>
+		<Depot>435871</Depot>
+		<Manifest>471362073238143096</Manifest>
+		<!-- Far Harbor DLC and Manifest IDs -->
+		<Depot>435881</Depot>
+		<Manifest>1207717296920736193</Manifest>
+	</Version>
+	<Version ID = "1.11.240">
+		<Depot>377161</Depot>
+		<Manifest>5983086794954940044</Manifest>
+		<Depot>377163</Depot>
+		<Manifest>5944191827186292545</Manifest>
+		<Depot>377162</Depot>
+		<Manifest>4737695048810094469</Manifest>
+		<Depot>377164</Depot>
+		<Manifest>8492427313392140315</Manifest>
+		<Depot>435880</Depot>
+		<Manifest>3925034910761260929</Manifest>
+		<Depot>435870</Depot>
+		<Manifest>1213339795579796878</Manifest>
+		<Depot>435871</Depot>
+		<Manifest>2409405813420002782</Manifest>
+		<!-- Far Harbor DLC and Manifest IDs -->
+		<Depot>435881</Depot>
+		<Manifest>1207717296920736193</Manifest>
+	</Version>
 </Depots>
