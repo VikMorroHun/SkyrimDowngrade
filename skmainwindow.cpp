@@ -81,7 +81,7 @@ SKMainWindow::SKMainWindow(QWidget *parent)
 		//pThreadControl->sendControllerStringBasic( "Controller Activated :)");
 	}
 
-	this->setWindowTitle("Skyrim Downgrade utility");
+	this->setWindowTitle("Skyrim Downgrade Utility");
 	ui->pushButtonBrowse->setIcon( QIcon::fromTheme("system-file-manager") );
 	ui->pushButtonBrowse2->setIcon( QIcon::fromTheme("system-file-manager") );
 	pXMLReader = new XMLReader();
@@ -119,9 +119,11 @@ SKMainWindow::SKMainWindow(QWidget *parent)
 	}
 	ui->textEdit->append( tr( "YOU HAVE TO CLOSE STEAM BEFORE DOWNGRADING BECAUSE DEPOTDOWNLOADER WON'T WORK OTHERWISE.") );ui->lineEditPW->setEchoMode( QLineEdit::Password );
 	ui->statusbar->showMessage( tr("Downgrade utility started." ), 2000);
+#if OSTYPE == OSLINUX
 	ui->textEdit->append( "\nTEST MODE STARTED!!\n");
 	ui->lineEditGamePath->setText("/mnt/QVO 2TB_Games/SteamLibrary/steamapps/common/Skyrim Special Edition");
 	ui->lineEditDownloadPath->setText( "/mnt/drive_d/Skyrim Downgrader");
+#endif
 }
 
 //+------------------------------------------------------------------+
