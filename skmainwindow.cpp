@@ -28,33 +28,37 @@ SKMainWindow::SKMainWindow(QWidget *parent)
 	int index;
 
 	ui->setupUi(this);
-/*	QAction* newAct = new QAction("save");
-	auto fileMenu = menuBar()->addMenu(tr("&File"));			https://stackoverflow.com/questions/41367027/qt-add-menubar-menus-and-sub-menus-to-qmainwindow
-	fileMenu->addAction(newAct);
-	auto submenu = fileMenu->addMenu("Submenu");
-	submenu->addAction(new QAction("action1");
-	submenu->addAction(new QAction("action2");
-*/
-	fileMenu = ui->menubar->addMenu( "&File" );
-	exitAction = browseAction = openXMLAction = NULL;		// otherwise crash at startup if not exists
+	fileMenu = ui->menubar->addMenu( "&File" );					//https://stackoverflow.com/questions/41367027/qt-add-menubar-menus-and-sub-menus-to-qmainwindow
+	//auto submenu = fileMenu->addMenu("Submenu");
+	exitAction = browseActionGame = openXMLAction = NULL;		// otherwise crash at startup if not exists
 	exitAction = new QAction( tr("E&xit"), this);			//newAct = new QAction(QIcon::fromTheme(QIcon::ThemeIcon::DocumentNew), tr("&New"), this);
-	browseAction = new QAction( tr("&Browse"), this );
-	ui->comboBoxGame->clear();ui->comboBoxVersion->clear();			// after connect, it calls XMLReader::ReadXMLSL via on_comboBoxGameCurrentTextChanged!!!
+	browseActionGame = new QAction( tr("&Browse game"), this );
+	browseActionDownload = new QAction( tr( "Browse &Download folder" ), this );
+	ui->comboBoxGame->clear();ui->comboBoxVersion->clear();			// after connecting, it calls XMLReader::ReadXMLSL via on_comboBoxGameCurrentTextChanged!!!
 	connect( ui->comboBoxVersion, &QComboBox::activated, this, &SKMainWindow::on_comboBoxVersionActivated );
 	connect( ui->pushButtonAbort, &QPushButton::clicked, this, &SKMainWindow::on_pushButtonAbortClicked );
 	connect( ui->pushButtonBrowse, &QPushButton::clicked, this, &SKMainWindow::on_pushButtonBrowseClicked );
 	connect( ui->pushButtonBrowse2, &QPushButton::clicked, this, &SKMainWindow::on_pushButtonBrowse2Clicked );
 	connect( ui->pushButtonDownload, &QPushButton::clicked, this, &SKMainWindow::on_pushButtonDownloadClicked );
 	connect( ui->pushButtonSubwin, &QPushButton::clicked, this, &SKMainWindow::on_pushButtonSubwinClicked );
+	if ( browseActionGame != NULL )
+	{
+		fileMenu->addAction( browseActionGame );
+		connect( browseActionGame, &QAction::triggered, this, &SKMainWindow::on_pushButtonBrowseClicked );
+		browseActionGame->setStatusTip( tr("Set game install location") );
+	}
+	if ( browseActionDownload != NULL )
+	{
+		fileMenu->addAction( browseActionDownload );
+		connect( browseActionDownload, &QAction::triggered, this, &SKMainWindow::on_pushButtonBrowse2Clicked );
+		browseActionDownload->setStatusTip( tr("Set download folder location") );
+	}
 	startDir = QDir::current();
 	pProcessDL = NULL;										// to avoid possible segmentation fault
 	if ( !TESTMODE )
 		ui->pushButtonSubwin->setVisible( false );
 	if ( TESTMODE == 1 )
 		openXMLAction = new QAction( tr("Open XML"), this );
-	this->SetBrowseAction();
-	if ( browseAction != NULL )
-		fileMenu->addAction( browseAction );
 	if ( openXMLAction != NULL )
 	{
 		openXMLAction->setStatusTip( tr("Open XML file for testing") );
@@ -93,18 +97,6 @@ SKMainWindow::SKMainWindow(QWidget *parent)
 	sGamePathSkyrim = WindowsRegSkyrimSE.value("installed path", "").toString();								// here it can read it.  Later it can't.
 	QSettings WindowsRegFallout4("HKEY_LOCAL_MACHINE\\SOFTWARE\\Wow6432Node\\Bethesda Softworks\\Fallout4", QSettings::NativeFormat);
 	sGamePathFallout4 = WindowsRegFallout4.value("installed path", "").toString();
-	/*pWindowsRegSteamCMD = NULL;
-	pWindowsRegSteamCMD = new QSettings( "HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Valve\\Steam", QSettings::NativeFormat );		// can read registry
-	sPathSteamCMD = pWindowsRegSteamCMD->value("InstallPath", "").toString();
-	if ( !sPathSteamCMD.isEmpty() )
-	{
-		sPathSteamCMD += "CMD";
-		/ *ui->textEdit->append( "SteamCMD registry entry not found.");
-		pWindowsRegSteamCMD->setValue("installed path", "c:\\Win10 Program Files\\SteamCMD");						// cannot write registry
-		str = pWindowsRegSteamCMD->value("installed path", "").toString();		* /
-		ui->textEdit->append( tr("SteamCMD path is %1").arg(sPathSteamCMD));
-	}
-	else ui->textEdit->append( tr("Steam path not found!" ) );	*/
 	this->PrefetchAppName();
 	if ( ( index = ui->comboBoxGame->findText( "Skyrim SE/AE" ) ) > -1 )
 		ui->comboBoxGame->setCurrentIndex( index );
@@ -127,6 +119,9 @@ SKMainWindow::SKMainWindow(QWidget *parent)
 	}
 	ui->textEdit->append( tr( "YOU HAVE TO CLOSE STEAM BEFORE DOWNGRADING BECAUSE DEPOTDOWNLOADER WON'T WORK OTHERWISE.") );ui->lineEditPW->setEchoMode( QLineEdit::Password );
 	ui->statusbar->showMessage( tr("Downgrade utility started." ), 2000);
+	ui->textEdit->append( "\nTEST MODE STARTED!!\n");
+	ui->lineEditGamePath->setText("/mnt/QVO 2TB_Games/SteamLibrary/steamapps/common/Skyrim Special Edition");
+	ui->lineEditDownloadPath->setText( "/mnt/drive_d/Skyrim Downgrader");
 }
 
 //+------------------------------------------------------------------+
@@ -139,8 +134,10 @@ SKMainWindow::~SKMainWindow()
 {
 	if ( exitAction != NULL )
 		delete exitAction;
-	if ( browseAction != NULL )
-		delete browseAction;
+	if ( browseActionGame != NULL )
+		delete browseActionGame;
+	if ( browseActionDownload != NULL )
+		delete browseActionDownload;
 	if ( pXMLReader != NULL )
 		delete pXMLReader;
 	if ( openXMLAction != NULL )
@@ -241,7 +238,10 @@ void SKMainWindow::DeleteFiles()
 	if ( pMainShared == NULL )
 		return;
 	if ( !pMainShared->slDeleteFiles.size() )
+	{
+		ui->textEdit->append( tr("It seems no files are needed to be deleted." ) );
 		return;
+	}
 	sGamePath = ui->lineEditGamePath->text();
 	//qDebug() << "slDeleteFiles size == " << pMainShared->slDeleteFiles.size();
 	if ( !sGamePath.endsWith('/') )
@@ -255,7 +255,7 @@ void SKMainWindow::DeleteFiles()
 			if ( pFile->exists() )
 			{
 				if ( pFile->remove() )
-					ui->textEdit->append( tr( "%1 deleted.").arg(pMainShared->slDeleteFiles.at(i) ) );
+					ui->textEdit->append( tr( "%1 has been deleted.").arg(pMainShared->slDeleteFiles.at(i) ) );
 				else ui->textEdit->append( tr( "Cannot delete %1.").arg(pMainShared->slDeleteFiles.at(i) ) );
 			}
 			delete pFile;
@@ -272,13 +272,11 @@ void SKMainWindow::DeleteFiles()
 void SKMainWindow::GameInstallLocationOutput()
 {
 	if ( ui->comboBoxGame->currentText() == "Skyrim SE/AE" )
-	{
-		sGamePath = sGamePathSkyrim;this->setWindowTitle("Skyrim Downgrade utility");
-	}
-	if ( ui->comboBoxGame->currentText() == "Fallout 4" )
-	{
-		sGamePath = sGamePathFallout4;this->setWindowTitle("Fallout 4 Downgrade utility");
-	}
+		sGamePath = sGamePathSkyrim;
+	else if ( ui->comboBoxGame->currentText() == "Fallout 4" )
+		sGamePath = sGamePathFallout4;
+	if ( ui->comboBoxGame->currentText().size() )
+		this->setWindowTitle( ui->comboBoxGame->currentText() + tr( " Downgrade Utility" ) );
 	if ( !sGamePath.isEmpty() )
 	{
 		sGamePath.replace( '\\', '/' );
@@ -515,8 +513,9 @@ void SKMainWindow::on_pushButtonBrowseClicked()
 		QDir::setCurrent( sGamePath );
 	if ( ui->comboBoxGame->currentText() == "Skyrim SE/AE" )
 		sFileName = QFileDialog::getOpenFileName(this, tr("Open Skyrim folder"), "", "SkyrimSE.exe");
-	if ( ui->comboBoxGame->currentText() == "Fallout 4" )
+	else if ( ui->comboBoxGame->currentText() == "Fallout 4" )
 		sFileName = QFileDialog::getOpenFileName(this, tr("Open Fallout 4 folder"), "", "Fallout4.exe");
+	else sFileName = QFileDialog::getOpenFileName(this, tr("Open game folder"), "", "*.exe");
 	if ( sFileName.isEmpty() )
 		return;
 	if ( !sFileName.endsWith('/') )
@@ -541,15 +540,12 @@ void SKMainWindow::on_pushButtonBrowseClicked()
 //+------------------------------------------------------------------+
 void SKMainWindow::on_pushButtonBrowse2Clicked()
 {
-	QStringList slFiles;
-	QFileDialog fDialog(this);
+	QString sDLFolderName;
 
-	fDialog.setFileMode( QFileDialog::Directory );slFiles.clear();
-	if ( fDialog.exec() )
-		slFiles = fDialog.selectedFiles();
-	if ( slFiles.isEmpty() )
+	sDLFolderName = QFileDialog::getExistingDirectory( this, tr( "Open download folder" ), "", QFileDialog::ShowDirsOnly );
+	if ( sDLFolderName.isEmpty() )
 		return;
-	ui->lineEditDownloadPath->setText( slFiles.at(0) );
+	ui->lineEditDownloadPath->setText( sDLFolderName );
 }
 
 //+------------------------------------------------------------------+
@@ -560,9 +556,9 @@ void SKMainWindow::on_pushButtonBrowse2Clicked()
 //+------------------------------------------------------------------+
 void SKMainWindow::on_pushButtonDownloadClicked()
 {
-	QString str;
+	QString sProcessCommand;
 	QFileInfoList fiList;				// synonym for QList<QFileInfo>
-	QStringList filters;
+	QStringList filters, slArguments;
 
 	if ( pMainShared == NULL )
 	{
@@ -581,16 +577,9 @@ void SKMainWindow::on_pushButtonDownloadClicked()
 		ui->textEdit->append( tr( "You have to select a game version to downgrade." ) );
 		return;
 	}
-	this->ResetDepotManifestIDs();
-	this->GetDepotAndManifestIDs();
 	if ( ui->lineEditGamePath->text().isEmpty() )
 	{
 		ui->textEdit->append( tr( "Game path is empty, can't downgrade %1." ).arg( pMainShared->sAppName ) );
-		return;
-	}
-	if ( pMainShared->slDepotIDs.isEmpty() || pMainShared->slManifestIDs.isEmpty() )
-	{
-		ui->textEdit->append( tr( "Error: Depot and/or manifest ID list is empty!") );
 		return;
 	}
 	if ( pProcessDL == NULL )
@@ -608,6 +597,13 @@ void SKMainWindow::on_pushButtonDownloadClicked()
 		ui->textEdit->append( tr( "Username or password missing!") );
 		return;
 	}
+	this->ResetDepotManifestIDs();
+	this->GetDepotAndManifestIDs();
+	if ( pMainShared->slDepotIDs.isEmpty() || pMainShared->slManifestIDs.isEmpty() )
+	{
+		ui->textEdit->append( tr( "Error: Depot and/or manifest ID list is empty!") );
+		return;
+	}
 	ui->textEdit->append( tr("Target directory for downloaded files: %1\n").arg( ui->lineEditDownloadPath->text()) );
 	QDir dirDownload( ui->lineEditDownloadPath->text() );bAbortClickedOnce = false;
 	if ( !dirDownload.exists() )
@@ -622,6 +618,7 @@ void SKMainWindow::on_pushButtonDownloadClicked()
 			{
 				ui->pushButtonAbort->setEnabled( true );
 				this->FinalizeDowngrade();
+				this->FinalizeDowngrade2();
 				return;
 			}
 			msgBox.setWindowTitle(tr("Warning!  Download directory is not empty!"));
@@ -647,23 +644,42 @@ void SKMainWindow::on_pushButtonDownloadClicked()
 			}
 		}
 	}
-	str = startDir.absolutePath() + "/DepotDownloader/DepotDownloader.exe";
+#if OSTYPE == OSWINDOWS
+	sProcessCommand = startDir.absolutePath() + "/DepotDownloader/DepotDownloader.exe";
 	if ( TESTMODE == 1 )
-		qDebug() << "Downloader path: " << str;
-	if ( !QFile::exists( str ) )
+		qDebug() << "Downloader path: " << sProcessCommand;
+	if ( !QFile::exists( sProcessCommand ) )
 	{
-		ui->textEdit->append( tr("Can't find Depotdownloader at %1!").arg( str ) );
+		ui->textEdit->append( tr("Can't find DepotDownloader at %1!").arg( sProcessCommand ) );
 		return;
 	}
-	ui->textEdit->append("Starting DepotDownloader...\n");
+	ui->textEdit->append("Starting DepotDownloader...\n");		// update code from on_readyReadStd?  do we need cmd.exe?
 	pProcessDL->setNativeArguments( "" );
-	str = "cmd.exe";
-	pProcessDL->start( str );
+	sProcessCommand = "cmd.exe";
+	pProcessDL->start( sProcessCommand );
 	/*
 	 * Windows: The arguments are quoted and joined into a command line that is compatible with the CommandLineToArgvW() Windows function.
 	 * For programs that have different command line quoting requirements, you need to use setNativeArguments(). One notable program that does
 	 * not follow the CommandLineToArgvW() rules is cmd.exe and, by consequence, all batch scripts.
 	 */
+#endif
+#if OSTYPE == OSLINUX
+	sProcessCommand = startDir.absolutePath() + "/DepotDownloader/DepotDownloader";
+	if ( TESTMODE == 1 )
+		qDebug() << "Downloader path: " << sProcessCommand;
+	if ( !QFile::exists( sProcessCommand ) )
+	{
+		ui->textEdit->append( tr("Can't find DepotDownloader at %1!").arg( sProcessCommand ) );
+		return;
+	}
+	ui->textEdit->append("Starting DepotDownloader...\n");
+	slArguments.clear();
+
+	//sProcessCommand = "ls";					// thanks to https://forum.qt.io/topic/113592/run-command-line-from-qt-app-in-linux/5 grullo wrote at 2020. ápr. 13. 6:55
+	//slArguments << "-l" << "~";
+	slArguments = this->slDLParamConstruct( pMainShared->iState++ );
+	pProcessDL->start( sProcessCommand, slArguments );
+#endif
 }
 
 //+------------------------------------------------------------------+
@@ -740,7 +756,6 @@ void SKMainWindow::on_comboBoxGameCurrentTextChanged(const QString &arg1)
 
 	this->SetGameDefinitions();
 	this->GameInstallLocationOutput();s.clear();
-	this->SetBrowseAction();
 }
 
 //+------------------------------------------------------------------+
@@ -773,17 +788,20 @@ void SKMainWindow::on_readyReadStd()
 	ui->textEdit->verticalScrollBar()->setValue( ui->textEdit->verticalScrollBar()->maximum() );
 	if ( pMainShared == NULL )
 		return;
-	if ( str.contains( "Total downloaded:" ) )
+#if OSTYPE == OSWINDOWS
+	if ( str.contains( "Total downloaded:" ) )						// old version, works on Windows, rewrite candidate :)
 	{
 		if ( pMainShared->iState < pMainShared->slDepotIDs.size() )
 		{
 			sArguments = this->sDLParamConstruct( pMainShared->iState++ );
+
 			str = "DepotDownloader.exe";
 			str += " " + sArguments + "\n";
 			pProcessDL->write( str.toLatin1().constData() );	// OK
 		}
 		else this->FinalizeDowngrade();
 	}
+#endif
 }
 
 //+------------------------------------------------------------------+
@@ -794,7 +812,8 @@ void SKMainWindow::on_readyReadStd()
 //+------------------------------------------------------------------+
 void SKMainWindow::on_processFinished(int exitCode, QProcess::ExitStatus exitStatus)
 {
-	QString str;
+	QString str, sArguments;
+	QStringList slArguments;
 	int iRet;
 
 	str = tr( "Process exited with code %1." ).arg(exitCode);		//+ QString::number(exitCode)
@@ -810,12 +829,37 @@ void SKMainWindow::on_processFinished(int exitCode, QProcess::ExitStatus exitSta
 		msgBox.setDefaultButton( QMessageBox::Ok );
 		iRet = msgBox.exec();
 		if ( iRet == QMessageBox::Cancel )
+		{
+			ui->comboBoxGame->setEnabled( true );ui->comboBoxVersion->setEnabled( true );
+			ui->pushButtonBrowse->setEnabled( true );ui->pushButtonBrowse2->setEnabled( true );
 			return;
+		}
 	}
 	else if ( pProcessDL != NULL )
-		ui->textEdit->append( tr( "Process finished." ) );
+	{
+			if ( pMainShared->iState < pMainShared->slDepotIDs.size() )
+			{
+				//qDebug() << "current iteration: " << pMainShared->slDepotIDs[pMainShared->iState];
+#if OSTYPE == OSWINDOWS
+				sArguments = this->sDLParamConstruct( pMainShared->iState++ );
+				str = "DepotDownloader.exe";
+				needs polish
+				//str += " " + sArguments + "\n";
+				//pProcessDL->write( str.toLatin1().constData() );	// not OK anymore
+#elif OSTYPE == OSLINUX
+				str = startDir.absolutePath() + "/DepotDownloader/DepotDownloader";				// start process
+				slArguments.clear();
+				slArguments = this->slDLParamConstruct( pMainShared->iState++ );
+				pProcessDL->start( str, slArguments );
+				return;
+#endif
+			}
+			if ( pMainShared->iState > pMainShared->slDepotIDs.size() )
+				ui->textEdit->append( tr( "Process finished." ) );
+			if ( pMainShared->iState == pMainShared->slDepotIDs.size() )
+				this->FinalizeDowngrade();
+	}
 	ui->comboBoxGame->setEnabled( true );ui->comboBoxVersion->setEnabled( true );ui->pushButtonBrowse->setEnabled( true );ui->pushButtonBrowse2->setEnabled( true );
-	this->ResetDepotManifestIDs();
 }
 
 //+------------------------------------------------------------------+
@@ -826,17 +870,29 @@ void SKMainWindow::on_processFinished(int exitCode, QProcess::ExitStatus exitSta
 //+------------------------------------------------------------------+
 void SKMainWindow::on_processStarted()
 {
-	QString str, sArguments;
+	QString sProcessIn, sArguments;
 
 	ui->pushButtonAbort->setEnabled( true );
 	ui->comboBoxGame->setEnabled( false );ui->comboBoxVersion->setEnabled( false );ui->pushButtonBrowse->setEnabled( false );ui->pushButtonBrowse2->setEnabled( false );
-	sArguments = this->sDLParamConstruct( pMainShared->iState++ );
 	//qDebug() << sArguments;
-	str = "DepotDownloader.exe";		// already checked if it's here: startDir.absolutePath() + "DepotDownloader/"
-	str += " " + sArguments + "\n";
-	pProcessDL->write( "cd depotdownloader\n");	//  >nul doesn't work
-	pProcessDL->write( str.toLatin1().constData() );	// OK
+#if OSTYPE == OSWINDOWS
+	sArguments = this->sDLParamConstruct( pMainShared->iState++ );
+	sProcessIn = "DepotDownloader.exe";		// already checked if it's here: startDir.absolutePath() + "DepotDownloader/"
+	sProcessIn += " " + sArguments + "\n";
+	pProcessDL->write( "cd depotdownloader\n" );	//  >nul doesn't work
+	pProcessDL->write( sProcessIn.toLatin1().constData() );	// OK
 	//pProcessDL->write( "calc.exe\n" );			// OK
+#elif OSTYPE == OSLINUX
+	//qDebug() << "Linux process started.";
+	sProcessIn = "DepotDownloader";
+	sProcessIn += " " + sArguments + "\n";
+	/*if ( pProcessDL->write( QString("cd DepotDownloader\n").toLatin1().constData() ) < 0 )	//  >nul doesn't work
+	{
+		ui->textEdit->append( tr( "Uh-oh.  Process write error happened." ) );
+		return;
+	}
+	pProcessDL->write( sProcessIn.toLatin1().constData() );	// OK	*/
+#endif
 }
 
 //+------------------------------------------------------------------+
@@ -849,26 +905,8 @@ void SKMainWindow::ResetDepotManifestIDs()
 {
 	if ( pMainShared == NULL )
 		return;
-	pMainShared->iState = 0;pMainShared->slDepotIDs.clear();pMainShared->sAppID.clear();pMainShared->bInterrupt = false;			// interrupt needed?
+	pMainShared->iState = 0;pMainShared->slDepotIDs.clear();pMainShared->sAppID.clear();pMainShared->bInterrupt = false;
 	pMainShared->slManifestIDs.clear();pMainShared->slDeleteFiles.clear();pMainShared->sAppName.clear();//pMainShared->sList.clear();	// allowed only in XMLReader::ReadXMLSL()!
-}
-
-//+------------------------------------------------------------------+
-//| Set Browse action in File menu                                   |
-//| INPUT: none                                                      |
-//| OUTPUT: tooltip text updated                                     |
-//| REMARK: TODO: connect to appropriate pushButtonBrowse.Clicked()  |
-//+------------------------------------------------------------------+
-void SKMainWindow::SetBrowseAction()
-{
-	if ( browseAction != NULL )
-	{
-		if ( ui->comboBoxGame->currentText() == "Skyrim SE/AE" )
-			browseAction->setStatusTip( tr("Set Skyrim install location WIP") );
-		if ( ui->comboBoxGame->currentText() == "Fallout 4" )
-			browseAction->setStatusTip( tr("Set Fallout 4 install location WIP") );
-		//connect( browseAction, &QAction::triggered, this, ...);
-	}
 }
 
 //+------------------------------------------------------------------+
@@ -898,7 +936,7 @@ void SKMainWindow::SetGameDefinitions()
 				str = pMainShared->slDefinitionFiles.at( i );bFound = true;
 				break;
 			}
-		if ( !TESTMODE && !bFound )
+		if ( !bFound && !TESTMODE )
 		{
 			if ( ui->comboBoxGame->currentText().isEmpty() )
 				ui->textEdit->append( tr( "Error!  No match found for selected game '%1' in game definition files!").arg( sGameNameEmpty ) );
@@ -958,7 +996,6 @@ void SKMainWindow::PrefetchAppName()
 	qint32 i, j;
 	QString str, elementText;
 	bool bFound;
-	//QFile * pFile;
 
 	sDefXMLDir = startDir.absolutePath() + "/GameDefinitions";pMainShared->slDefinitionFiles.clear();
 	if ( pXMLReader == NULL )
@@ -977,7 +1014,6 @@ void SKMainWindow::PrefetchAppName()
 	for ( i = 0; i < fiList.size(); i++ )				// https://stackoverflow.com/questions/27758573/deleting-a-folder-and-all-its-contents-with-qt is better
 	{
 		//qDebug() << "dirPrefetch entry: " << fiList.at(i).absoluteFilePath();
-		//pFile = new QFile( fiList.at(i).absoluteFilePath() );
 		pXMLReader->ReadXMLSL( fiList.at(i).absoluteFilePath(), pMainShared, false );bFound = false;
 		if ( !pMainShared->sList.size() )
 		{
@@ -990,7 +1026,8 @@ void SKMainWindow::PrefetchAppName()
 			if ( str.contains( "AppName", Qt::CaseInsensitive) )
 			{
 				elementText = pXMLReader->getsElementText( str );bFound = true;
-				ui->comboBoxGame->addItem( elementText );pMainShared->slDefinitionFiles.append( fiList.at(i).absoluteFilePath() );
+				ui->comboBoxGame->addItem( elementText );
+				pMainShared->slDefinitionFiles.append( fiList.at(i).absoluteFilePath() );
 				break;
 			}
 		}
@@ -1004,7 +1041,7 @@ void SKMainWindow::PrefetchAppName()
 //| Construct parameter string for DL process                        |
 //| INPUT: phase (iState)                                            |
 //| OUTPUT: argument string                                          |
-//| REMARK: none                                                     |
+//| REMARK: for Windows                                              |
 //+------------------------------------------------------------------+
 QString SKMainWindow::sDLParamConstruct( int phase )
 {
@@ -1024,10 +1061,40 @@ QString SKMainWindow::sDLParamConstruct( int phase )
 	}
 	sArguments += "-username " + ui->lineEditUser->text() + " ";
 	sArguments += "-password " + ui->lineEditPW->text() + " ";
-	//if ( !phase )
-		sArguments += "-remember-password ";
+	sArguments += "-remember-password ";
 	sArguments += "-dir " + ui->lineEditDownloadPath->text();
 	return sArguments;
+}
+
+//+------------------------------------------------------------------+
+//| Construct parameter string list for DL process                   |
+//| INPUT: phase (iState)                                            |
+//| OUTPUT: argument string list                                     |
+//| REMARK: for Linux                                                |
+//+------------------------------------------------------------------+
+QStringList SKMainWindow::slDLParamConstruct( int phase )
+{
+	QStringList slArguments;
+
+	slArguments.clear();
+	slArguments.append( "-app");
+	slArguments.append( pMainShared->sAppID );
+	if ( TESTMODE )
+	{
+		slArguments << "-depot" << "489833";									//TEST
+		slArguments << "-manifest" << "2442187225363891157";					//TEST
+		pMainShared->slDepotIDs.clear();
+	}
+	else
+	{
+		slArguments << "-depot" << pMainShared->slDepotIDs.at( phase );
+		slArguments << "-manifest" << pMainShared->slManifestIDs.at( phase );
+	}
+	slArguments << "-username" << ui->lineEditUser->text();
+	slArguments << "-password" << ui->lineEditPW->text();
+	slArguments << "-remember-password";
+	slArguments << "-dir" << ui->lineEditDownloadPath->text();
+	return slArguments;
 }
 
 //+------------------------------------------------------------------+
@@ -1038,6 +1105,7 @@ QString SKMainWindow::sDLParamConstruct( int phase )
 //+------------------------------------------------------------------+
 void SKMainWindow::FinalizeDowngrade()
 {
+	//qDebug() << "FinalizeDowngrade started.";
 	if ( pProcessDL->state() == QProcess::Running )
 		pProcessDL->write( "exit\n" );
 	if ( pThreadControl == NULL )
@@ -1048,6 +1116,7 @@ void SKMainWindow::FinalizeDowngrade()
 		ui->textEdit->append( tr( "Downgrading finished.") );
 		return;
 	}
+	pMainShared->iState++;
 	emit pThreadControl->sendWorkerStartSignal( ui->lineEditDownloadPath->text(), ui->lineEditGamePath->text() );
 }
 
@@ -1059,6 +1128,8 @@ void SKMainWindow::FinalizeDowngrade()
 //+------------------------------------------------------------------+
 void SKMainWindow::FinalizeDowngrade2()
 {
+	if ( pThreadControl == NULL )				// already finished in this case
+		return;
 	this->DeleteFiles();
 	ui->textEdit->append( tr( "Downgrading finished.") );
 }

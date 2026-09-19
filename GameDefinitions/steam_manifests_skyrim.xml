@@ -43,6 +43,7 @@
 		<Delete>Data/MarketplaceTextures.bsa</Delete>
 		<Delete>Data/_ResourcePack.bsa</Delete>
 		<Delete>Data/_ResourcePack.esl</Delete>
+		<Delete>Data/Skyrim - Patch.bsa</Delete>
 	</Version>
 	<Version ID = "1.6.342.0">
 		<Depot>489833</Depot>
@@ -54,6 +55,7 @@
 		<Delete>Data/MarketplaceTextures.bsa</Delete>
 		<Delete>Data/_ResourcePack.bsa</Delete>
 		<Delete>Data/_ResourcePack.esl</Delete>
+		<Delete>Data/Skyrim - Patch.bsa</Delete>
 	</Version>
 	<Version ID = "1.6.353.0">
 		<Depot>489833</Depot>
@@ -65,6 +67,7 @@
 		<Delete>Data/MarketplaceTextures.bsa</Delete>
 		<Delete>Data/_ResourcePack.bsa</Delete>
 		<Delete>Data/_ResourcePack.esl</Delete>
+		<Delete>Data/Skyrim - Patch.bsa</Delete>
 	</Version>
 	<Version ID = "1.6.640.0">
 		<Depot>489833</Depot>
@@ -76,6 +79,7 @@
 		<Delete>Data/MarketplaceTextures.bsa</Delete>
 		<Delete>Data/_ResourcePack.bsa</Delete>
 		<Delete>Data/_ResourcePack.esl</Delete>
+		<Delete>Data/Skyrim - Patch.bsa</Delete>
 	</Version>
 	<Version ID = "1.6.1130.0">
 		<Depot>489833</Depot>
@@ -84,6 +88,7 @@
 		<Manifest>4341968404481569190</Manifest>
 		<Depot>489831</Depot>
 		<Manifest>3737743381894105176</Manifest>
+		<Delete>Data/Skyrim - Patch.bsa</Delete>
 	</Version>
 	<Version ID = "1.6.1170.0">
 		<Depot>489833</Depot>
@@ -92,6 +97,7 @@
 		<Manifest>8042843504692938467</Manifest>
 		<Depot>489831</Depot>
 		<Manifest>8442952117333549665</Manifest>
+		<Delete>Data/Skyrim - Patch.bsa</Delete>
 	</Version>
 	<Version ID = "1.7.99">
 		<Depot>489833</Depot>
@@ -100,5 +106,6 @@
 		<Manifest>1885196179801530198</Manifest>
 		<Depot>489831</Depot>
 		<Manifest>3552311541133526669</Manifest>
+		<Delete>Data/Skyrim - Patch.bsa</Delete>
 	</Version>
 </Depots>

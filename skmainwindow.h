@@ -1,6 +1,9 @@
 #ifndef SKMAINWINDOW_H
 #define SKMAINWINDOW_H
 #define TESTMODE 0			// 0 - release, 1 - test mode, 2 - public beta test, 3 - copy files only
+#define OSLINUX 1
+#define OSWINDOWS 2
+#define OSTYPE OSLINUX
 
 #include "XMLReader.h"
 #include "subwindow.h"
@@ -41,11 +44,11 @@ private:
 	QMenu * fileMenu;
 	QMenuBar * menuBar;
 	QAction * exitAction;		// Esc key press?
-	QAction * browseAction;
+	QAction * browseActionGame, *browseActionDownload;
 	QAction * openXMLAction;
 	QProcess * pProcessDL;
-	QString sDefXMLDir, sGamePath, sGamePathSkyrim, sGamePathFallout4;		//, sPathSteamCMD
-	QSettings WindowsRegSkyrimSE, WindowsRegFallout4;		//, * pWindowsRegSteamCMD
+	QString sDefXMLDir, sGamePath, sGamePathSkyrim, sGamePathFallout4;
+	QSettings WindowsRegSkyrimSE, WindowsRegFallout4;
 	QMessageBox msgBox;
 	QDir startDir;
 	QPointer <Subwindow> pSubwindow;
@@ -55,9 +58,9 @@ private:
 	void ResetDepotManifestIDs();
 	void SetGameDefinitions();
 	void GameInstallLocationOutput();
-	void SetBrowseAction();
 	void PrefetchAppName();
 	QString sDLParamConstruct( int );
+	QStringList slDLParamConstruct( int );
 	void FinalizeDowngrade();
 	void FinalizeDowngrade2();
 

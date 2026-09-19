@@ -123,7 +123,7 @@ void Worker::doCopyFiles( QString sDLPath, QString sGamePath )
 		}
 		if ( pFileTarget->exists() )
 			pFileTarget->remove();
-		pFileSource->copy( pFileTarget->fileName() );
+		pFileSource->copy( pFileTarget->fileName() );				// basic, slow
 		//qDebug() << "copied to: " << pFileTarget->fileName();
 		emit sendWorkerStringBasic( sFileNameTarget );		//sFileNameSource + "->" +
 		if ( pFileSource != NULL )
