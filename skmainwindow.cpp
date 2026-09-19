@@ -193,7 +193,7 @@ void SKMainWindow::CopyFiles()
 		if ( fiList.at( i ).filePath() == ui->lineEditDownloadPath->text() + "/Data" )
 			fiList.removeAt( i );
 	}
-	ui->textEdit->append( tr( "Copying files...") );
+	ui->textEdit->append( tr( "\nCopying files...") );
 	for ( i = 0; i < fiList.size(); i++ )
 	{
 		sFileNameSource = fiList.at( i ).filePath();
@@ -241,11 +241,10 @@ void SKMainWindow::DeleteFiles()
 		return;
 	if ( !pMainShared->slDeleteFiles.size() )
 	{
-		ui->textEdit->append( tr("It seems no files are needed to be deleted." ) );
+		ui->textEdit->append( tr( "It seems there is no need to delete files from the game folder." ) );
 		return;
 	}
 	sGamePath = ui->lineEditGamePath->text();
-	//qDebug() << "slDeleteFiles size == " << pMainShared->slDeleteFiles.size();
 	if ( !sGamePath.endsWith('/') )
 		sGamePath.append('/');
 	for ( int i = 0; i < pMainShared->slDeleteFiles.size(); i++ )
@@ -257,8 +256,8 @@ void SKMainWindow::DeleteFiles()
 			if ( pFile->exists() )
 			{
 				if ( pFile->remove() )
-					ui->textEdit->append( tr( "%1 has been deleted.").arg(pMainShared->slDeleteFiles.at(i) ) );
-				else ui->textEdit->append( tr( "Cannot delete %1.").arg(pMainShared->slDeleteFiles.at(i) ) );
+					ui->textEdit->append( tr( "%1 has been deleted.").arg( pFile->fileName() ) );
+				else ui->textEdit->append( tr( "Cannot delete %1.").arg( pFile->fileName() ) );
 			}
 			delete pFile;
 		}
@@ -648,25 +647,9 @@ void SKMainWindow::on_pushButtonDownloadClicked()
 	}
 #if OSTYPE == OSWINDOWS
 	sProcessCommand = startDir.absolutePath() + "/DepotDownloader/DepotDownloader.exe";
-	if ( TESTMODE == 1 )
-		qDebug() << "Downloader path: " << sProcessCommand;
-	if ( !QFile::exists( sProcessCommand ) )
-	{
-		ui->textEdit->append( tr("Can't find DepotDownloader at %1!").arg( sProcessCommand ) );
-		return;
-	}
-	ui->textEdit->append("Starting DepotDownloader...\n");		// update code from on_readyReadStd?  do we need cmd.exe?
-	pProcessDL->setNativeArguments( "" );
-	sProcessCommand = "cmd.exe";
-	pProcessDL->start( sProcessCommand );
-	/*
-	 * Windows: The arguments are quoted and joined into a command line that is compatible with the CommandLineToArgvW() Windows function.
-	 * For programs that have different command line quoting requirements, you need to use setNativeArguments(). One notable program that does
-	 * not follow the CommandLineToArgvW() rules is cmd.exe and, by consequence, all batch scripts.
-	 */
-#endif
-#if OSTYPE == OSLINUX
+#elif OSTYPE == OSLINUX
 	sProcessCommand = startDir.absolutePath() + "/DepotDownloader/DepotDownloader";
+#endif
 	if ( TESTMODE == 1 )
 		qDebug() << "Downloader path: " << sProcessCommand;
 	if ( !QFile::exists( sProcessCommand ) )
@@ -681,7 +664,7 @@ void SKMainWindow::on_pushButtonDownloadClicked()
 	//slArguments << "-l" << "~";
 	slArguments = this->slDLParamConstruct( pMainShared->iState++ );
 	pProcessDL->start( sProcessCommand, slArguments );
-#endif
+
 }
 
 //+------------------------------------------------------------------+
@@ -769,7 +752,7 @@ void SKMainWindow::on_comboBoxGameCurrentTextChanged(const QString &arg1)
 void SKMainWindow::on_readyReadStd()
 {
 	QByteArray baData;
-	QString str, sArguments;
+	QString str;
 
 	baData = pProcessDL->readAllStandardOutput();
 	if ( baData.endsWith( '\n' ) )			// or removeLast()
@@ -788,22 +771,6 @@ void SKMainWindow::on_readyReadStd()
 		return;
 	ui->textEdit->append( baData.data() );
 	ui->textEdit->verticalScrollBar()->setValue( ui->textEdit->verticalScrollBar()->maximum() );
-	if ( pMainShared == NULL )
-		return;
-#if OSTYPE == OSWINDOWS
-	if ( str.contains( "Total downloaded:" ) )						// old version, works on Windows, rewrite candidate :)
-	{
-		if ( pMainShared->iState < pMainShared->slDepotIDs.size() )
-		{
-			sArguments = this->sDLParamConstruct( pMainShared->iState++ );
-
-			str = "DepotDownloader.exe";
-			str += " " + sArguments + "\n";
-			pProcessDL->write( str.toLatin1().constData() );	// OK
-		}
-		else this->FinalizeDowngrade();
-	}
-#endif
 }
 
 //+------------------------------------------------------------------+
@@ -814,16 +781,16 @@ void SKMainWindow::on_readyReadStd()
 //+------------------------------------------------------------------+
 void SKMainWindow::on_processFinished(int exitCode, QProcess::ExitStatus exitStatus)
 {
-	QString str, sArguments;
+	QString sProcess;
 	QStringList slArguments;
 	int iRet;
 
-	str = tr( "Process exited with code %1." ).arg(exitCode);		//+ QString::number(exitCode)
+	sProcess = tr( "Process exited with code %1." ).arg(exitCode);		//+ QString::number(exitCode)
 	if ( exitStatus == QProcess::CrashExit )
-		str += "  Process crashed.";
+		sProcess += "  Process crashed.";
 	if ( exitCode != 0 )
 	{
-		ui->textEdit->append( str );
+		ui->textEdit->append( sProcess );
 		msgBox.setText( tr("Something went wrong.") );		//Do you wish to continue?
 		msgBox.setDetailedText( tr("There has been a problem.  Process exited with error code %1.").arg(exitCode) );
 		msgBox.setWindowTitle( tr("Warning") );
@@ -839,29 +806,26 @@ void SKMainWindow::on_processFinished(int exitCode, QProcess::ExitStatus exitSta
 	}
 	else if ( pProcessDL != NULL )
 	{
-			if ( pMainShared->iState < pMainShared->slDepotIDs.size() )
-			{
-				//qDebug() << "current iteration: " << pMainShared->slDepotIDs[pMainShared->iState];
+		if ( pMainShared->iState < pMainShared->slDepotIDs.size() )
+		{
+			//qDebug() << "current iteration: " << pMainShared->slDepotIDs[pMainShared->iState];
 #if OSTYPE == OSWINDOWS
-				sArguments = this->sDLParamConstruct( pMainShared->iState++ );
-				str = "DepotDownloader.exe";
-				needs polish
-				//str += " " + sArguments + "\n";
-				//pProcessDL->write( str.toLatin1().constData() );	// not OK anymore
+			sProcess = startDir.absolutePath() + "/DepotDownloader/DepotDownloader.exe";				// start process
 #elif OSTYPE == OSLINUX
-				str = startDir.absolutePath() + "/DepotDownloader/DepotDownloader";				// start process
-				slArguments.clear();
-				slArguments = this->slDLParamConstruct( pMainShared->iState++ );
-				pProcessDL->start( str, slArguments );
-				return;
+			sProcess = startDir.absolutePath() + "/DepotDownloader/DepotDownloader";				// start process
 #endif
-			}
-			if ( pMainShared->iState > pMainShared->slDepotIDs.size() )
-				ui->textEdit->append( tr( "Process finished." ) );
-			if ( pMainShared->iState == pMainShared->slDepotIDs.size() )
-				this->FinalizeDowngrade();
+			slArguments.clear();
+			slArguments = this->slDLParamConstruct( pMainShared->iState++ );
+			pProcessDL->start( sProcess, slArguments );
+			return;
+		}
+		if ( pMainShared->iState > pMainShared->slDepotIDs.size() )				// bug :)
+			ui->textEdit->append( tr( "Process finished." ) );
+		if ( pMainShared->iState == pMainShared->slDepotIDs.size() )
+			this->FinalizeDowngrade();
 	}
-	ui->comboBoxGame->setEnabled( true );ui->comboBoxVersion->setEnabled( true );ui->pushButtonBrowse->setEnabled( true );ui->pushButtonBrowse2->setEnabled( true );
+	ui->comboBoxGame->setEnabled( true );ui->comboBoxVersion->setEnabled( true );
+	ui->pushButtonBrowse->setEnabled( true );ui->pushButtonBrowse2->setEnabled( true );
 }
 
 //+------------------------------------------------------------------+
@@ -872,29 +836,8 @@ void SKMainWindow::on_processFinished(int exitCode, QProcess::ExitStatus exitSta
 //+------------------------------------------------------------------+
 void SKMainWindow::on_processStarted()
 {
-	QString sProcessIn, sArguments;
-
 	ui->pushButtonAbort->setEnabled( true );
 	ui->comboBoxGame->setEnabled( false );ui->comboBoxVersion->setEnabled( false );ui->pushButtonBrowse->setEnabled( false );ui->pushButtonBrowse2->setEnabled( false );
-	//qDebug() << sArguments;
-#if OSTYPE == OSWINDOWS
-	sArguments = this->sDLParamConstruct( pMainShared->iState++ );
-	sProcessIn = "DepotDownloader.exe";		// already checked if it's here: startDir.absolutePath() + "DepotDownloader/"
-	sProcessIn += " " + sArguments + "\n";
-	pProcessDL->write( "cd depotdownloader\n" );	//  >nul doesn't work
-	pProcessDL->write( sProcessIn.toLatin1().constData() );	// OK
-	//pProcessDL->write( "calc.exe\n" );			// OK
-#elif OSTYPE == OSLINUX
-	//qDebug() << "Linux process started.";
-	sProcessIn = "DepotDownloader";
-	sProcessIn += " " + sArguments + "\n";
-	/*if ( pProcessDL->write( QString("cd DepotDownloader\n").toLatin1().constData() ) < 0 )	//  >nul doesn't work
-	{
-		ui->textEdit->append( tr( "Uh-oh.  Process write error happened." ) );
-		return;
-	}
-	pProcessDL->write( sProcessIn.toLatin1().constData() );	// OK	*/
-#endif
 }
 
 //+------------------------------------------------------------------+
@@ -1043,7 +986,7 @@ void SKMainWindow::PrefetchAppName()
 //| Construct parameter string for DL process                        |
 //| INPUT: phase (iState)                                            |
 //| OUTPUT: argument string                                          |
-//| REMARK: for Windows                                              |
+//| REMARK: for cmd.exe, deprecated                                  |
 //+------------------------------------------------------------------+
 QString SKMainWindow::sDLParamConstruct( int phase )
 {
@@ -1072,7 +1015,7 @@ QString SKMainWindow::sDLParamConstruct( int phase )
 //| Construct parameter string list for DL process                   |
 //| INPUT: phase (iState)                                            |
 //| OUTPUT: argument string list                                     |
-//| REMARK: for Linux                                                |
+//| REMARK: none                                                     |
 //+------------------------------------------------------------------+
 QStringList SKMainWindow::slDLParamConstruct( int phase )
 {
