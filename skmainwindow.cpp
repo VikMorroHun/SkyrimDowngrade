@@ -126,11 +126,20 @@ SKMainWindow::SKMainWindow(QWidget *parent)
 	}
 	ui->textEdit->append( tr( "YOU HAVE TO CLOSE STEAM BEFORE DOWNGRADING BECAUSE DEPOTDOWNLOADER WON'T WORK OTHERWISE.") );ui->lineEditPW->setEchoMode( QLineEdit::Password );
 	ui->statusbar->showMessage( tr("Downgrade utility started." ), 2000);
-/*#if OSTYPE == OSLINUX
-	ui->textEdit->append( "\nTEST MODE STARTED!!\n");
-	ui->lineEditGamePath->setText("/mnt/QVO 2TB_Games/SteamLibrary/steamapps/common/Skyrim Special Edition");
-	ui->lineEditDownloadPath->setText( "/mnt/drive_d/Skyrim Downgrader");
-#endif	*/
+	if ( !TESTMODE )
+		return;
+	if ( QSysInfo::productType().contains( "linux", Qt::CaseInsensitive ) )
+	{
+		ui->textEdit->append( "\nTEST MODE STARTED!!\n");
+		ui->lineEditGamePath->setText("/mnt/QVO 2TB_Games/SteamLibrary/steamapps/common/Skyrim Special Edition");
+		ui->lineEditDownloadPath->setText( "/mnt/drive_d/Skyrim Downgrader");
+	}
+	if ( QSysInfo::productType() == "windows" )
+	{
+		ui->textEdit->append( "\nTEST MODE STARTED!!\n");
+		ui->lineEditGamePath->setText("e:/SteamLibrary/SteamApps/common/Skyrim Special Edition");
+		ui->lineEditDownloadPath->setText( "D:/Skyrim Downgrader");
+	}
 }
 
 //+------------------------------------------------------------------+
@@ -257,7 +266,14 @@ void SKMainWindow::DeleteFiles()
 {
 	QString sFileName;
 	QFile * pFile;
+	QDir dirDownload( ui->lineEditGamePath->text() + "/.DepotDownloader" );
 
+	if ( dirDownload.exists() )
+	{
+		if ( dirDownload.removeRecursively() )
+			ui->textEdit->append( tr( "Unnecessary %1 directory has been deleted." ).arg( dirDownload.absolutePath() ) );
+		else ui->textEdit->append( tr( "Unnecessary %1 directory has not been deleted. :(" ).arg( dirDownload.absolutePath() ) );
+	}
 	if ( pMainShared == NULL )
 		return;
 	if ( !pMainShared->slDeleteFiles.size() )
@@ -666,7 +682,6 @@ void SKMainWindow::on_pushButtonDownloadClicked()
 			{
 				this->DisableControls();
 				this->FinalizeDowngrade();
-				//this->FinalizeDowngrade2();
 				return;
 			}
 			msgBox.setWindowTitle(tr("Warning!  Download directory is not empty!"));
@@ -692,11 +707,10 @@ void SKMainWindow::on_pushButtonDownloadClicked()
 			}
 		}
 	}
-#if OSTYPE == OSWINDOWS
-	sProcessCommand = startDir.absolutePath() + "/DepotDownloader/DepotDownloader.exe";
-#elif OSTYPE == OSLINUX
-	sProcessCommand = startDir.absolutePath() + "/DepotDownloader/DepotDownloader";
-#endif
+	if ( QSysInfo::productType() == "windows" )
+		sProcessCommand = startDir.absolutePath() + "/DepotDownloader/DepotDownloader.exe";
+	else if ( QSysInfo::productType().contains( "linux", Qt::CaseInsensitive ) )
+		sProcessCommand = startDir.absolutePath() + "/DepotDownloader/DepotDownloader";
 	if ( TESTMODE == 1 )
 		qDebug() << "Downloader path: " << sProcessCommand;
 	if ( !QFile::exists( sProcessCommand ) )
@@ -892,11 +906,10 @@ void SKMainWindow::on_processDLFinished(int exitCode, QProcess::ExitStatus exitS
 		if ( pMainShared->iState < pMainShared->slDepotIDs.size() )
 		{
 			//qDebug() << "current iteration: " << pMainShared->slDepotIDs[pMainShared->iState];
-#if OSTYPE == OSWINDOWS
-			sProcess = startDir.absolutePath() + "/DepotDownloader/DepotDownloader.exe";				// start process
-#elif OSTYPE == OSLINUX
-			sProcess = startDir.absolutePath() + "/DepotDownloader/DepotDownloader";				// start process
-#endif
+			if ( QSysInfo::productType() == "windows" )
+				sProcess = startDir.absolutePath() + "/DepotDownloader/DepotDownloader.exe";				// start process
+			else if ( QSysInfo::productType().contains( "linux", Qt::CaseInsensitive ) )
+				sProcess = startDir.absolutePath() + "/DepotDownloader/DepotDownloader";				// start process
 			slArguments.clear();
 			slArguments = this->slDLParamConstruct( pMainShared->iState++ );
 			pProcessDL->start( sProcess, slArguments );
@@ -933,11 +946,18 @@ void SKMainWindow::on_processCopyFastFinished(int exitCode, QProcess::ExitStatus
 	QString sProcess;
 	QStringList slArguments;
 	int iRet;
+	bool bProblem = false;
 
 	sProcess = tr( "Process exited with code %1." ).arg(exitCode);		//+ QString::number(exitCode)
 	if ( exitState == QProcess::CrashExit )
 		sProcess += "  Process crashed.";
-	if ( exitCode != 0 )
+	if ( QSysInfo::productType() == "windows" )
+		if ( exitCode > 7 )						// based on https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/robocopy#exit-return-codes
+			bProblem = true;
+	if ( QSysInfo::productType().contains( "linux", Qt::CaseInsensitive ) )
+		if ( exitCode )
+			bProblem = true;
+	if ( bProblem )
 	{
 		ui->textEdit->append( sProcess );
 		msgBox.setText( tr("Something went wrong.") );		//Do you wish to continue?
@@ -948,7 +968,7 @@ void SKMainWindow::on_processCopyFastFinished(int exitCode, QProcess::ExitStatus
 		iRet = msgBox.exec();
 		if ( iRet == QMessageBox::Ok )
 		{
-			this->EnableControls();
+			this->FinalizeDowngrade2();
 			return;
 		}
 	}
@@ -1175,7 +1195,7 @@ void SKMainWindow::FinalizeDowngrade2()
 //+------------------------------------------------------------------+
 void SKMainWindow::DisableControls()
 {
-	ui->pushButtonAbort->setEnabled( true );
+	ui->pushButtonAbort->setEnabled( true );ui->pushButtonDownload->setEnabled( false );
 	ui->comboBoxGame->setEnabled( false );ui->comboBoxVersion->setEnabled( false );
 	ui->pushButtonBrowse->setEnabled( false );ui->pushButtonBrowse2->setEnabled( false );
 }
@@ -1188,7 +1208,7 @@ void SKMainWindow::DisableControls()
 //+------------------------------------------------------------------+
 void SKMainWindow::EnableControls()
 {
-	ui->comboBoxGame->setEnabled( true );ui->comboBoxVersion->setEnabled( true );
+	ui->comboBoxGame->setEnabled( true );ui->comboBoxVersion->setEnabled( true );ui->pushButtonDownload->setEnabled( true );
 	ui->pushButtonBrowse->setEnabled( true );ui->pushButtonBrowse2->setEnabled( true );
 }
 
@@ -1201,8 +1221,7 @@ void SKMainWindow::EnableControls()
 void SKMainWindow::CopyFastPreparation()
 {
 	QStringList slArguments;
-	//qint32 i, j;
-	QString sFileNameSource, sFileNameTarget, sProcessCommand;
+	QString sProcessCommand;
 
 	if ( pMainShared == NULL )
 	{
@@ -1210,11 +1229,10 @@ void SKMainWindow::CopyFastPreparation()
 		return;
 	}
 	ui->textEdit->append( tr( "\nCopying files..." ) );pMainShared->iState = 0;
-#if OSTYPE == OSLINUX
-	sProcessCommand = "rsync";
-#elif OSTYPE == OSWINDOWS
-	sProcessCommand = "robocopy";
-#endif
+	if ( QSysInfo::productType().contains( "linux", Qt::CaseInsensitive ) )
+		sProcessCommand = "rsync";
+	else if ( QSysInfo::productType() == "windows" )
+		sProcessCommand = "robocopy";
 	slArguments = this->slCopyFastParamConstruct( pMainShared->iState++ );
 	pProcessCopyFast->start( sProcessCommand, slArguments );
 }
@@ -1235,23 +1253,29 @@ QStringList SKMainWindow::slCopyFastParamConstruct( int iPhase )
 		;
 	if ( pMainShared == NULL )				// should not be possible
 		return slArguments;
-#if OSTYPE == OSLINUX
-	slArguments.append( "-av");
-	slArguments.append( "-r" );
-	slArguments << "--exclude=.DepotDownloader/*";
-	sSourceDir = ui->lineEditDownloadPath->text();
-	if ( !sSourceDir.endsWith( '/' ) )
-		sSourceDir.append( '/' );
-	sTargetDir = ui->lineEditGamePath->text();
-	if ( !sTargetDir.endsWith( '/' ) )
-		sTargetDir.append( '/' );
-	slArguments << sSourceDir << sTargetDir;
-#elif OSTYPE == OSWINDOWS
-	sSourceDir = ui->lineEditDownloadPath->text();
-	sTargetDir = ui->lineEditGamePath->text();
-	slArguments << sSourceDir << sTargetDir;
-	slArguments << "/s" << "/mt" << "/j";
-	slArguments.append( "/xd .DepotDownloader" );
-#endif
+	if ( QSysInfo::productType().contains( "linux", Qt::CaseInsensitive ) )
+	{
+		slArguments.append( "-av");
+		slArguments.append( "-r" );
+		slArguments << "--exclude=.DepotDownloader/*";
+		sSourceDir = ui->lineEditDownloadPath->text();
+		if ( !sSourceDir.endsWith( '/' ) )
+			sSourceDir.append( '/' );
+		sTargetDir = ui->lineEditGamePath->text();
+		if ( !sTargetDir.endsWith( '/' ) )
+			sTargetDir.append( '/' );
+		slArguments << sSourceDir << sTargetDir;
+	}
+	else if ( QSysInfo::productType() == "windows" )
+	{
+		sSourceDir = ui->lineEditDownloadPath->text();
+		sTargetDir = ui->lineEditGamePath->text();
+		slArguments << sSourceDir << sTargetDir;
+		slArguments << "/s" << "/mt:32";	// << "/j";
+		//sSourceDir.replace( '/', '\\' );
+		//sSourceDir = "/xd \"" + sSourceDir + "\\.DepotDownloader\"";
+		//slArguments.append( sSourceDir );
+		//slArguments.append( "/xd .DepotDownloader" );					// doesn't work :(
+	}
 	return slArguments;
 }

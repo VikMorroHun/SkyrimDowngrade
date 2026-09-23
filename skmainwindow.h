@@ -1,9 +1,6 @@
 #ifndef SKMAINWINDOW_H
 #define SKMAINWINDOW_H
-#define TESTMODE 3			// 0 - release, 1 - test mode, 2 - public beta test, 3 - copy files only
-#define OSLINUX 1
-#define OSWINDOWS 2
-#define OSTYPE OSLINUX		// Had to be determined at compile time because of SetNativeArguments() Windows function.  (deprecated)
+#define TESTMODE 0			// 0 - release, 1 - test mode, 2 - public beta test, 3 - copy files only
 
 #include "XMLReader.h"
 #include "subwindow.h"

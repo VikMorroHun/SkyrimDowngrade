@@ -135,7 +135,7 @@ void XMLReader::ReadXMLSL( QString fileName, strucShared * pShared, bool bEchoMo
 		}
 	}
 	file.close();delete pTsXML;
-	str = QObject::tr("File containing Steam depot information %1 loaded.").arg(fileName);
+	str = QObject::tr("File containing Steam depot information %1 has been loaded.").arg(fileName);
 	if ( bEchoMode )
 		emit XMLSendStringBasicSignal( str );
 }
