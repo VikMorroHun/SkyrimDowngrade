@@ -1,9 +1,9 @@
 #ifndef SKMAINWINDOW_H
 #define SKMAINWINDOW_H
-#define TESTMODE 0			// 0 - release, 1 - test mode, 2 - public beta test, 3 - copy files only
+#define TESTMODE 3			// 0 - release, 1 - test mode, 2 - public beta test, 3 - copy files only
 #define OSLINUX 1
 #define OSWINDOWS 2
-#define OSTYPE OSWINDOWS		// had to be determined at compile time because of SetNativeArguments() Windows function.  (deprecated)
+#define OSTYPE OSLINUX		// Had to be determined at compile time because of SetNativeArguments() Windows function.  (deprecated)
 
 #include "XMLReader.h"
 #include "subwindow.h"
@@ -33,8 +33,16 @@ class SKMainWindow : public QMainWindow
 public:
 	SKMainWindow(QWidget *parent = nullptr);
 	~SKMainWindow();
+	void SetVersionCombobox();
+	void GetDepotAndManifestIDs();
+	void ResetSharedStruct();
 	void DeleteFiles();
 	void CopyFiles();
+	void FinalizeDowngrade();
+	void FinalizeDowngrade2();
+	void DisableControls();
+	void EnableControls();
+	void CopyFastPreparation();
 	XMLReader * pXMLReader;
 	strucShared * pMainShared;
 	Controller * pThreadControl;
@@ -46,23 +54,17 @@ private:
 	QAction * exitAction;		// Esc key press?
 	QAction * browseActionGame, *browseActionDownload;
 	QAction * openXMLAction;
-	QProcess * pProcessDL;
+	QProcess * pProcessDL, * pProcessCopyFast;
 	QString sDefXMLDir, sGamePath, sGamePathSkyrim, sGamePathFallout4;
 	QSettings WindowsRegSkyrimSE, WindowsRegFallout4;
 	QMessageBox msgBox;
 	QDir startDir;
 	QPointer <Subwindow> pSubwindow;
-	bool bAbortClickedOnce;
-	void SetVersionCombobox();
-	void GetDepotAndManifestIDs();
-	void ResetDepotManifestIDs();
 	void SetGameDefinitions();
 	void GameInstallLocationOutput();
 	void PrefetchAppName();
-	QString sDLParamConstruct( int );
 	QStringList slDLParamConstruct( int );
-	void FinalizeDowngrade();
-	void FinalizeDowngrade2();
+	QStringList slCopyFastParamConstruct( int );
 
 private slots:
 	void on_ExitMenuClicked();
@@ -81,9 +83,9 @@ private slots:
 
 	void on_comboBoxGameCurrentTextChanged(const QString &arg1);
 
-	void on_readyReadStd();
+	void on_ReadStdOutputDL();
 
-	void on_processFinished(int, QProcess::ExitStatus);
+	void on_processDLFinished(int, QProcess::ExitStatus);
 
 	void on_pushButtonBrowse2Clicked();
 
@@ -94,6 +96,10 @@ private slots:
 	void on_subwinCancelButtonClicked();
 
 	void on_processStarted();
+
+	void on_processCopyFastFinished(int, QProcess::ExitStatus);
+
+	void on_ReadStdOutputCopyFast();
 
 signals:
 	void StartSubwinSignal();

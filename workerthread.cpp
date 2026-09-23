@@ -68,6 +68,12 @@ void Controller::InterruptWorker()
 	emit sendControllerStringBasic( tr("Copying interrupted, aborting..." ) );
 }
 
+//+------------------------------------------------------------------+
+//| Copy files using worker thread                                   |
+//| INPUT: download path (source), game path (dest)                  |
+//| OUTPUT: none                                                     |
+//| REMARK: none                                                     |
+//+------------------------------------------------------------------+
 void Worker::doCopyFiles( QString sDLPath, QString sGamePath )
 {
 	QStringList slFilters;
@@ -84,7 +90,8 @@ void Worker::doCopyFiles( QString sDLPath, QString sGamePath )
 	if ( fiList.isEmpty() )
 	{
 		//qDebug() << "fiList is empty.";
-		emit sendWorkerStringBasic( tr( "ERROR: No downloaded files found in %1.\n").arg( dirSource.absolutePath() ) );
+		//emit sendWorkerStringBasic( tr( "ERROR: No downloaded files found in %1.\n").arg( dirSource.absolutePath() ) );
+		emit resultReady( tr( "ERROR: No downloaded files found in %1.\n").arg( dirSource.absolutePath() ) );		// so SKMainWindow::FinalizeDowngrade2() is called
 		return;
 	}
 	fiList.append( dirSourceData.entryInfoList( slFilters, QDir::Files | QDir::NoDotAndDotDot ) );
@@ -95,7 +102,7 @@ void Worker::doCopyFiles( QString sDLPath, QString sGamePath )
 		if ( fiList.at( i ).filePath() == sDLPath + "/Data" )
 			fiList.removeAt( i );
 	}
-	emit sendWorkerStringBasic( tr( "Copying files..." ) );
+	emit sendWorkerStringBasic( tr( "\nCopying files..." ) );
 	for ( i = 0; i < fiList.size(); i++ )
 	{
 		if ( !this->bIsRunning() )						// interrupted
@@ -106,7 +113,10 @@ void Worker::doCopyFiles( QString sDLPath, QString sGamePath )
 		sFileNameSource = fiList.at( i ).filePath();
 		pFileSource = new QFile( sFileNameSource );
 		if ( pFileSource == NULL )
+		{
+			emit sendWorkerStringBasic( tr( "Cannot copy file %1.").arg( sFileNameSource ) );
 			continue;
+		}
 		sFileNameTarget = sGamePath;
 		if ( !sFileNameTarget.endsWith( '/' ) )
 			sFileNameTarget.append( '/' );
@@ -117,6 +127,7 @@ void Worker::doCopyFiles( QString sDLPath, QString sGamePath )
 		pFileTarget = new QFile( sFileNameTarget );
 		if ( pFileTarget == NULL )
 		{
+			emit sendWorkerStringBasic( tr( "Cannot copy file %1.").arg( sFileNameTarget ) );
 			if ( pFileSource != NULL )
 				delete pFileSource;
 			continue;

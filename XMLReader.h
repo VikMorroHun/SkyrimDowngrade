@@ -11,7 +11,7 @@
 
 struct strucShared
 {
-	int iState;			// 0 - idle, 1 - thread running, 2 - thread finished
+	int iState;
 	QStringList sList;
 	QStringList slDepotIDs, slManifestIDs, slDeleteFiles;
 	QStringList slDefinitionFiles;

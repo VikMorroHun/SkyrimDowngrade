@@ -15,7 +15,7 @@
  *   along with this program; if not, see <http://www.gnu.org/licenses>.   *
  ***************************************************************************/
 
-/*	SzőtsÁki: NEM A Qt A HÜLYE, HANEM A PROGRAMOZÓ.  "FALLOUT4" ESETE.  MEG ui->comboBoxGame->clear() + PrefetchAppName() == "complete nonsense"
+/*	SzőtsÁki: NEM A Qt A H****, HANEM A PROGRAMOZÓ.  "FALLOUT4" ESETE.  MEG ui->comboBoxGame->clear() + PrefetchAppName() == "complete nonsense"
 
 */
 #include "skmainwindow.h"
@@ -90,8 +90,8 @@ SKMainWindow::SKMainWindow(QWidget *parent)
 	else ui->textEdit->append( tr("XMLReader() critical error at startup!") );
 	pMainShared = new strucShared;
 	if ( pMainShared == NULL )
-		ui->textEdit->append( tr( "Critical error!  Shared data pointer problem at startup, program won't work!" ) );
-	else this->ResetDepotManifestIDs();
+		ui->textEdit->append( tr( "Critical ERROR!  Shared data pointer problem at startup, program won't work!" ) );
+	else this->ResetSharedStruct();
 	//pXMLReader->TestMsgSender();		// it works! :)
 	QSettings WindowsRegSkyrimSE("HKEY_LOCAL_MACHINE\\SOFTWARE\\Wow6432Node\\Bethesda Softworks\\Skyrim Special Edition", QSettings::NativeFormat);
 	sGamePathSkyrim = WindowsRegSkyrimSE.value("installed path", "").toString();								// here it can read it.  Later it can't.
@@ -105,12 +105,19 @@ SKMainWindow::SKMainWindow(QWidget *parent)
 	this->GameInstallLocationOutput();
 	pProcessDL = new QProcess( this );
 	if ( pProcessDL == NULL )
-		ui->textEdit->append( tr( "Critical error!  Can't start new process - can't download from Steam." ) );
+		ui->textEdit->append( tr( "Critical ERROR!  Can't start new process - can't download from Steam." ) );
 	else
 	{
-		connect( pProcessDL, &QProcess::readyReadStandardOutput, this, &SKMainWindow::on_readyReadStd );
-		connect( pProcessDL, &QProcess::finished, this, &SKMainWindow::on_processFinished );
+		connect( pProcessDL, &QProcess::readyReadStandardOutput, this, &SKMainWindow::on_ReadStdOutputDL );
+		connect( pProcessDL, &QProcess::finished, this, &SKMainWindow::on_processDLFinished );
 		connect( pProcessDL, &QProcess::started, this, &SKMainWindow::on_processStarted );
+	}
+	pProcessCopyFast = new QProcess( this );
+	if ( pProcessCopyFast != NULL )
+	{
+		connect( pProcessCopyFast, &QProcess::readyReadStandardOutput, this, &SKMainWindow::on_ReadStdOutputCopyFast );
+		connect( pProcessCopyFast, &QProcess::finished, this, &SKMainWindow::on_processCopyFastFinished );
+		connect( pProcessCopyFast, &QProcess::started, this, &SKMainWindow::on_processStarted );
 	}
 	if ( TESTMODE == 2 )		// public beta
 	{
@@ -119,11 +126,11 @@ SKMainWindow::SKMainWindow(QWidget *parent)
 	}
 	ui->textEdit->append( tr( "YOU HAVE TO CLOSE STEAM BEFORE DOWNGRADING BECAUSE DEPOTDOWNLOADER WON'T WORK OTHERWISE.") );ui->lineEditPW->setEchoMode( QLineEdit::Password );
 	ui->statusbar->showMessage( tr("Downgrade utility started." ), 2000);
-#if OSTYPE == OSLINUX
+/*#if OSTYPE == OSLINUX
 	ui->textEdit->append( "\nTEST MODE STARTED!!\n");
 	ui->lineEditGamePath->setText("/mnt/QVO 2TB_Games/SteamLibrary/steamapps/common/Skyrim Special Edition");
 	ui->lineEditDownloadPath->setText( "/mnt/drive_d/Skyrim Downgrader");
-#endif
+#endif	*/
 }
 
 //+------------------------------------------------------------------+
@@ -153,17 +160,27 @@ SKMainWindow::~SKMainWindow()
 		delete pProcessDL;
 	}
 	if ( pThreadControl != NULL )
+	{
+		if ( pThreadControl->bIsWorkerRunning() )
+			pThreadControl->sendWorkerInterruptSignal();
 		delete pThreadControl;
+	}
+	if ( pProcessCopyFast != NULL )
+	{
+		if ( pProcessCopyFast->state() == QProcess::Running )
+			pProcessCopyFast->kill();
+		delete pProcessCopyFast;
+	}
 	if ( pSubwindow )
 		delete pSubwindow;
 	delete ui;
 }
 
 //+------------------------------------------------------------------+
-//| Copy downloaded files to Data folder                             |
+//| Copy downloaded files to game folder                             |
 //| INPUT: none                                                      |
 //| OUTPUT: none                                                     |
-//| REMARK: after download completed                                 |
+//| REMARK: after download completed, old way                        |
 //+------------------------------------------------------------------+
 void SKMainWindow::CopyFiles()
 {
@@ -199,17 +216,21 @@ void SKMainWindow::CopyFiles()
 		sFileNameSource = fiList.at( i ).filePath();
 		pFileSource = new QFile( sFileNameSource );
 		if ( pFileSource == NULL )
+		{
+			ui->textEdit->append( tr( "Cannot copy file %1.").arg( sFileNameSource ) );
 			continue;
+		}
 		sFileNameTarget = ui->lineEditGamePath->text();
 		if ( !sFileNameTarget.endsWith( '/' ) )
 			sFileNameTarget.append( '/' );
 		j = sFileNameSource.lastIndexOf( "/Data", Qt::CaseInsensitive );
 		if ( j > -1 )
 			sFileNameTarget += "Data/";
-		sFileNameTarget += fiList.at( i ).fileName();	//pFileSource->fileName();
+		sFileNameTarget += fiList.at( i ).fileName();
 		pFileTarget = new QFile( sFileNameTarget );
 		if ( pFileTarget == NULL )
 		{
+			ui->textEdit->append( tr( "Cannot copy file %1.").arg( sFileNameTarget ) );
 			if ( pFileSource != NULL )
 				delete pFileSource;
 			continue;
@@ -386,7 +407,7 @@ void SKMainWindow::on_ExitMenuClicked()
 		{
 			msgBox.setWindowTitle(tr("Early exit"));
 			msgBox.setText(tr("Are you sure you want to quit?"));
-			msgBox.setDetailedText( tr( "The process is still running." ) );
+			msgBox.setDetailedText( tr( "Download process is still running." ) );
 			msgBox.setStandardButtons(QMessageBox::Ok | QMessageBox::Cancel);
 			msgBox.setDefaultButton(QMessageBox::Cancel);
 			iRet = msgBox.exec();
@@ -394,7 +415,26 @@ void SKMainWindow::on_ExitMenuClicked()
 			{
 				if ( pProcessDL->state() == QProcess::Running )
 					pProcessDL->close();				// close() and kill()
-					//pProcessDL->write( "0x03");		// Ctrl+C doesn't work
+					//pProcess->write( "0x03");		// Ctrl+C doesn't work
+				return;
+			}
+			else return;
+		}
+	}
+	if ( pProcessCopyFast != NULL )
+	{
+		if ( pProcessCopyFast->state() == QProcess::Running )
+		{
+			msgBox.setWindowTitle(tr("Early exit"));
+			msgBox.setText(tr("Are you sure you want to quit?"));
+			msgBox.setDetailedText( tr( "Copy process is still running." ) );
+			msgBox.setStandardButtons(QMessageBox::Ok | QMessageBox::Cancel);
+			msgBox.setDefaultButton(QMessageBox::Cancel);
+			iRet = msgBox.exec();
+			if ( iRet == QMessageBox::Ok )
+			{
+				if ( pProcessCopyFast->state() == QProcess::Running )
+					pProcessCopyFast->close();				// close() and kill()
 				return;
 			}
 			else return;
@@ -424,7 +464,8 @@ void SKMainWindow::on_OpenXMLMenuClicked()
 		ui->textEdit->append( tr( "%1 does not exist.").arg(sFileName) );
 		return;
 	}
-	pXMLReader->ReadXMLSLTest(sFileName, pMainShared );		//, TESTMODE not needed because conditional QAction/menu item
+	if ( pMainShared != NULL )
+		pXMLReader->ReadXMLSLTest(sFileName, pMainShared );		//, TESTMODE not needed because conditional QAction/menu item
 }
 
 //+------------------------------------------------------------------+
@@ -448,6 +489,7 @@ void SKMainWindow::on_comboBoxVersionActivated(int index)
 void SKMainWindow::on_pushButtonAbortClicked()
 {
 	qint32 iRet;
+	bool bProcessRunning = false;
 
 	if ( pThreadControl != NULL )
 		if ( pThreadControl->bIsWorkerRunning() )
@@ -457,46 +499,42 @@ void SKMainWindow::on_pushButtonAbortClicked()
 			msgBox.setInformativeText( tr( "Are you sure you want to interrupt?" ) );
 			msgBox.setStandardButtons( QMessageBox::Ok | QMessageBox::Cancel );
 			msgBox.setDefaultButton( QMessageBox::Cancel );
-			iRet = msgBox.exec();
+			iRet = msgBox.exec();bProcessRunning = true;
 			if ( iRet == QMessageBox::Ok )
 			{
 				pThreadControl->sendWorkerInterruptSignal();
-				ui->pushButtonAbort->setEnabled( false );
+				//ui->pushButtonAbort->setEnabled( false );
 				return;
 			}
 			if ( iRet == QMessageBox::Cancel )
 				return;
 		}
-	if ( pProcessDL == NULL )
-	{
-		ui->textEdit->append( tr("Process not available.") );
-		ui->pushButtonAbort->setEnabled( false );
-		return;
-	}
-	if ( pProcessDL->state() != QProcess::Running )
-	{
-		ui->textEdit->append( tr("Process not running.") );
-		ui->pushButtonAbort->setEnabled( false );
-		return;
-	}
-	if ( pProcessDL->state() == QProcess::Running )
-	{
-		msgBox.setWindowTitle(tr("Early exit"));
-		msgBox.setText(tr("Are you sure you want to quit?"));
-		msgBox.setDetailedText( tr( "The process is still running." ) );
-		msgBox.setStandardButtons(QMessageBox::Ok | QMessageBox::Cancel);
-		msgBox.setDefaultButton(QMessageBox::Cancel);
-		iRet = msgBox.exec();
-		if ( iRet == QMessageBox::Ok )
+	if ( pProcessDL != NULL )
+		if ( pProcessDL->state() == QProcess::Running )
 		{
-			if ( !bAbortClickedOnce && pProcessDL->state() == QProcess::Running )
-				pProcessDL->write( "exit\n" );		//  >nul doesn't work
-			if ( bAbortClickedOnce && pProcessDL->state() == QProcess::Running )
+			msgBox.setWindowTitle(tr("Early exit"));
+			msgBox.setText(tr("Are you sure you want to quit?"));
+			msgBox.setDetailedText( tr( "Download process is still running." ) );
+			msgBox.setStandardButtons(QMessageBox::Ok | QMessageBox::Cancel);
+			msgBox.setDefaultButton(QMessageBox::Cancel);
+			iRet = msgBox.exec();bProcessRunning = true;
+			if ( iRet == QMessageBox::Ok )
 				pProcessDL->close();				// close() and kill()
-			bAbortClickedOnce = true;
-				//pProcessDL->write( "0x03");		// Ctrl+C	doesn't work
 		}
-	}
+	if ( pProcessCopyFast != NULL )
+		if ( pProcessCopyFast->state() == QProcess::Running )
+		{
+			msgBox.setWindowTitle(tr("Early exit"));
+			msgBox.setText(tr("Are you sure you want to quit?"));
+			msgBox.setDetailedText( tr( "Copy process is still running." ) );
+			msgBox.setStandardButtons(QMessageBox::Ok | QMessageBox::Cancel);
+			msgBox.setDefaultButton(QMessageBox::Cancel);
+			iRet = msgBox.exec();bProcessRunning = true;
+			if ( iRet == QMessageBox::Ok )
+				pProcessCopyFast->close();				// close() and kill()
+		}
+	if ( !bProcessRunning )
+		ui->pushButtonAbort->setEnabled( false );
 }
 
 //+------------------------------------------------------------------+
@@ -510,6 +548,9 @@ void SKMainWindow::on_pushButtonBrowseClicked()
 	QString sFileName;
 	qint32 i;
 
+	if ( pThreadControl != NULL )
+		if ( pThreadControl->bIsWorkerRunning() )
+			return;
 	if ( !sGamePath.isEmpty() )
 		QDir::setCurrent( sGamePath );
 	if ( ui->comboBoxGame->currentText() == "Skyrim SE/AE" )
@@ -543,6 +584,9 @@ void SKMainWindow::on_pushButtonBrowse2Clicked()
 {
 	QString sDLFolderName;
 
+	if ( pThreadControl != NULL )
+		if ( pThreadControl->bIsWorkerRunning() )
+			return;
 	sDLFolderName = QFileDialog::getExistingDirectory( this, tr( "Open download folder" ), "", QFileDialog::ShowDirsOnly );
 	if ( sDLFolderName.isEmpty() )
 		return;
@@ -568,6 +612,9 @@ void SKMainWindow::on_pushButtonDownloadClicked()
 	}
 	if ( pMainShared->iState )
 		return;
+	if ( pThreadControl != NULL )
+		if ( pThreadControl->bIsWorkerRunning() )
+			return;
 	if ( ui->comboBoxGame->currentText().isEmpty() )
 	{
 		ui->textEdit->append( tr( "You have to select a game to downgrade." ) );
@@ -598,7 +645,7 @@ void SKMainWindow::on_pushButtonDownloadClicked()
 		ui->textEdit->append( tr( "Username or password missing!") );
 		return;
 	}
-	this->ResetDepotManifestIDs();
+	this->ResetSharedStruct();
 	this->GetDepotAndManifestIDs();
 	if ( pMainShared->slDepotIDs.isEmpty() || pMainShared->slManifestIDs.isEmpty() )
 	{
@@ -606,7 +653,7 @@ void SKMainWindow::on_pushButtonDownloadClicked()
 		return;
 	}
 	ui->textEdit->append( tr("Target directory for downloaded files: %1\n").arg( ui->lineEditDownloadPath->text()) );
-	QDir dirDownload( ui->lineEditDownloadPath->text() );bAbortClickedOnce = false;
+	QDir dirDownload( ui->lineEditDownloadPath->text() );
 	if ( !dirDownload.exists() )
 		dirDownload.mkdir( dirDownload.absolutePath() );
 	else
@@ -617,9 +664,9 @@ void SKMainWindow::on_pushButtonDownloadClicked()
 		{
 			if ( TESTMODE == 3 )
 			{
-				ui->pushButtonAbort->setEnabled( true );
+				this->DisableControls();
 				this->FinalizeDowngrade();
-				this->FinalizeDowngrade2();
+				//this->FinalizeDowngrade2();
 				return;
 			}
 			msgBox.setWindowTitle(tr("Warning!  Download directory is not empty!"));
@@ -678,11 +725,15 @@ void SKMainWindow::on_pushButtonSubwinClicked()
 	if ( pSubwindow == NULL )
 	{
 		pSubwindow = new Subwindow();
-		connect( pSubwindow, &Subwindow::SubwinSendTextSignal, this, &SKMainWindow::on_subwinOKButtonClicked);
-		connect( pSubwindow, &Subwindow::SubwinCancelSignal, this, &SKMainWindow::on_subwinCancelButtonClicked );
+		if ( pSubwindow != NULL )
+		{
+			connect( pSubwindow, &Subwindow::SubwinSendTextSignal, this, &SKMainWindow::on_subwinOKButtonClicked);
+			connect( pSubwindow, &Subwindow::SubwinCancelSignal, this, &SKMainWindow::on_subwinCancelButtonClicked );
+			//qDebug() << "Subwindow exists now.";
+		}
 	}
-	//else qDebug() << "Subwindow already exists.";
-	pSubwindow->show();
+	if ( pSubwindow != NULL )
+		pSubwindow->show();
 	/*pMdiArea = new QMdiArea();						// it works but destroys UI
 	*/
 }
@@ -722,11 +773,13 @@ void SKMainWindow::on_subwinCancelButtonClicked()
 {
 	ui->statusbar->showMessage( tr("2FA canceled."), 1000 );
 	if ( pProcessDL->state() == QProcess::Running )
-	{
-		pProcessDL->write( "x\n");
-		pProcessDL->write( "exit\n" );		// maybe closes process
-		//pProcessDL->close();				// close() and kill()
-	}
+		pProcessDL->close();				// close() and kill()
+	/*if ( TESTMODE )
+		if ( pMainShared != NULL )
+		{
+			qDebug() << "MainShared::iState is " << pMainShared->iState++;			// 0
+			this->CopyFastPreparation();
+		}*/
 }
 
 //+------------------------------------------------------------------+
@@ -749,26 +802,57 @@ void SKMainWindow::on_comboBoxGameCurrentTextChanged(const QString &arg1)
 //| OUTPUT: data as byte array into text edit field                  |
 //| REMARK: none                                                     |
 //+------------------------------------------------------------------+
-void SKMainWindow::on_readyReadStd()
+void SKMainWindow::on_ReadStdOutputDL()
 {
 	QByteArray baData;
-	QString str;
+	QString sProcessOutput;
 
-	baData = pProcessDL->readAllStandardOutput();
+	baData.clear();
+	if ( pProcessDL != NULL )
+		baData = pProcessDL->readAllStandardOutput();
+	if ( !baData.size() )
+		return;
 	if ( baData.endsWith( '\n' ) )			// or removeLast()
 		baData.chop( 1 );
 	if ( baData.endsWith( '\r' ) )
 		baData.chop( 1 );
-	str = baData.constData();
-	if ( str.contains( "Logging") && str.contains( "into Steam") )
+	sProcessOutput = baData.constData();
+	if ( sProcessOutput.contains( "Logging") && sProcessOutput.contains( "into Steam") )
 	{
 		ui->textEdit->append( tr( "If STEAM GUARD is activated on your account (it should be) use the Steam Mobile App to confirm your sign in...\n" ) );
 		//ui->textEdit->append( tr( "Otherwise report the error and hope that I can fix it.") );		// subwin - 2FA code?
 	}
-	if ( str.contains( "2FA") )
+	if ( sProcessOutput.contains( "2FA") )
 		this->on_pushButtonSubwinClicked();
-	if ( str.contains( "username", Qt::CaseInsensitive ) && str.contains( "password", Qt::CaseInsensitive ) )
+	if ( sProcessOutput.contains( "username", Qt::CaseInsensitive ) && sProcessOutput.contains( "password", Qt::CaseInsensitive ) )
 		return;
+	ui->textEdit->append( baData.data() );
+	ui->textEdit->verticalScrollBar()->setValue( ui->textEdit->verticalScrollBar()->maximum() );
+}
+
+//+------------------------------------------------------------------+
+//| Process has STD output                                           |
+//| INPUT: none                                                      |
+//| OUTPUT: data as byte array into text edit field                  |
+//| REMARK: had to separate them to avoid "device not open" warnings.|
+//+------------------------------------------------------------------+
+void SKMainWindow::on_ReadStdOutputCopyFast()
+{
+	QByteArray baData;
+
+	baData.clear();
+	if ( pProcessCopyFast != NULL )
+	{
+		baData = pProcessCopyFast->readAllStandardOutput();
+		//if ( baData.size() )
+			//qDebug() << "'Copy fast' process has standard output.";
+	}
+	if ( !baData.size() )
+		return;
+	if ( baData.endsWith( '\n' ) )			// or removeLast()
+		baData.chop( 1 );
+	if ( baData.endsWith( '\r' ) )
+		baData.chop( 1 );
 	ui->textEdit->append( baData.data() );
 	ui->textEdit->verticalScrollBar()->setValue( ui->textEdit->verticalScrollBar()->maximum() );
 }
@@ -779,28 +863,27 @@ void SKMainWindow::on_readyReadStd()
 //| OUTPUT: message box in case sg went wrong                        |
 //| REMARK: none                                                     |
 //+------------------------------------------------------------------+
-void SKMainWindow::on_processFinished(int exitCode, QProcess::ExitStatus exitStatus)
+void SKMainWindow::on_processDLFinished(int exitCode, QProcess::ExitStatus exitState)
 {
 	QString sProcess;
 	QStringList slArguments;
 	int iRet;
 
 	sProcess = tr( "Process exited with code %1." ).arg(exitCode);		//+ QString::number(exitCode)
-	if ( exitStatus == QProcess::CrashExit )
+	if ( exitState == QProcess::CrashExit )
 		sProcess += "  Process crashed.";
 	if ( exitCode != 0 )
 	{
 		ui->textEdit->append( sProcess );
-		msgBox.setText( tr("Something went wrong.") );		//Do you wish to continue?
+		msgBox.setText( tr("Something went wrong.") );
 		msgBox.setDetailedText( tr("There has been a problem.  Process exited with error code %1.").arg(exitCode) );
 		msgBox.setWindowTitle( tr("Warning") );
 		msgBox.setStandardButtons( QMessageBox::Ok );		//| QMessageBox::Cancel
 		msgBox.setDefaultButton( QMessageBox::Ok );
 		iRet = msgBox.exec();
-		if ( iRet == QMessageBox::Cancel )
+		if ( iRet == QMessageBox::Ok )
 		{
-			ui->comboBoxGame->setEnabled( true );ui->comboBoxVersion->setEnabled( true );
-			ui->pushButtonBrowse->setEnabled( true );ui->pushButtonBrowse2->setEnabled( true );
+			this->EnableControls();
 			return;
 		}
 	}
@@ -819,13 +902,11 @@ void SKMainWindow::on_processFinished(int exitCode, QProcess::ExitStatus exitSta
 			pProcessDL->start( sProcess, slArguments );
 			return;
 		}
-		if ( pMainShared->iState > pMainShared->slDepotIDs.size() )				// bug :)
-			ui->textEdit->append( tr( "Process finished." ) );
+		//if ( pMainShared->iState > pMainShared->slDepotIDs.size() )				// bug :)
+			//ui->textEdit->append( tr( "Process finished." ) );
 		if ( pMainShared->iState == pMainShared->slDepotIDs.size() )
 			this->FinalizeDowngrade();
 	}
-	ui->comboBoxGame->setEnabled( true );ui->comboBoxVersion->setEnabled( true );
-	ui->pushButtonBrowse->setEnabled( true );ui->pushButtonBrowse2->setEnabled( true );
 }
 
 //+------------------------------------------------------------------+
@@ -836,8 +917,42 @@ void SKMainWindow::on_processFinished(int exitCode, QProcess::ExitStatus exitSta
 //+------------------------------------------------------------------+
 void SKMainWindow::on_processStarted()
 {
-	ui->pushButtonAbort->setEnabled( true );
-	ui->comboBoxGame->setEnabled( false );ui->comboBoxVersion->setEnabled( false );ui->pushButtonBrowse->setEnabled( false );ui->pushButtonBrowse2->setEnabled( false );
+	if ( pMainShared != NULL )
+		if ( pMainShared->iState == 1 )
+			this->DisableControls();
+}
+
+//+------------------------------------------------------------------+
+//| Process finished, should we continue?                            |
+//| INPUT: none                                                      |
+//| OUTPUT: message box in case sg went wrong                        |
+//| REMARK: none                                                     |
+//+------------------------------------------------------------------+
+void SKMainWindow::on_processCopyFastFinished(int exitCode, QProcess::ExitStatus exitState)
+{
+	QString sProcess;
+	QStringList slArguments;
+	int iRet;
+
+	sProcess = tr( "Process exited with code %1." ).arg(exitCode);		//+ QString::number(exitCode)
+	if ( exitState == QProcess::CrashExit )
+		sProcess += "  Process crashed.";
+	if ( exitCode != 0 )
+	{
+		ui->textEdit->append( sProcess );
+		msgBox.setText( tr("Something went wrong.") );		//Do you wish to continue?
+		msgBox.setDetailedText( tr("There has been a problem.  Process exited with error code %1.").arg(exitCode) );
+		msgBox.setWindowTitle( tr("Warning") );
+		msgBox.setStandardButtons( QMessageBox::Ok );		//| QMessageBox::Cancel
+		msgBox.setDefaultButton( QMessageBox::Ok );
+		iRet = msgBox.exec();
+		if ( iRet == QMessageBox::Ok )
+		{
+			this->EnableControls();
+			return;
+		}
+	}
+	this->FinalizeDowngrade2();
 }
 
 //+------------------------------------------------------------------+
@@ -846,7 +961,7 @@ void SKMainWindow::on_processStarted()
 //| OUTPUT: yes                                                      |
 //| REMARK: none                                                     |
 //+------------------------------------------------------------------+
-void SKMainWindow::ResetDepotManifestIDs()
+void SKMainWindow::ResetSharedStruct()
 {
 	if ( pMainShared == NULL )
 		return;
@@ -942,11 +1057,11 @@ void SKMainWindow::PrefetchAppName()
 	QString str, elementText;
 	bool bFound;
 
-	sDefXMLDir = startDir.absolutePath() + "/GameDefinitions";pMainShared->slDefinitionFiles.clear();
 	if ( pXMLReader == NULL )
 		return;
 	if ( pMainShared == NULL )
 		return;
+	sDefXMLDir = startDir.absolutePath() + "/GameDefinitions";pMainShared->slDefinitionFiles.clear();
 	QDir dirPrefetch( sDefXMLDir );
 	slFilters << "*.xml";		// "*.*" does work!
 	fiList = dirPrefetch.entryInfoList( slFilters, QDir::Files );
@@ -983,35 +1098,6 @@ void SKMainWindow::PrefetchAppName()
 }
 
 //+------------------------------------------------------------------+
-//| Construct parameter string for DL process                        |
-//| INPUT: phase (iState)                                            |
-//| OUTPUT: argument string                                          |
-//| REMARK: for cmd.exe, deprecated                                  |
-//+------------------------------------------------------------------+
-QString SKMainWindow::sDLParamConstruct( int phase )
-{
-	QString sArguments;
-
-	sArguments = "-app " + pMainShared->sAppID + " ";
-	if ( TESTMODE )
-	{
-		sArguments += "-depot 489833 ";									//TEST
-		sArguments += "-manifest 2442187225363891157 ";					//TEST
-		pMainShared->slDepotIDs.clear();
-	}
-	else
-	{
-		sArguments += "-depot " + pMainShared->slDepotIDs.at( phase ) + " ";
-		sArguments += "-manifest " + pMainShared->slManifestIDs.at( phase ) + " ";
-	}
-	sArguments += "-username " + ui->lineEditUser->text() + " ";
-	sArguments += "-password " + ui->lineEditPW->text() + " ";
-	sArguments += "-remember-password ";
-	sArguments += "-dir " + ui->lineEditDownloadPath->text();
-	return sArguments;
-}
-
-//+------------------------------------------------------------------+
 //| Construct parameter string list for DL process                   |
 //| INPUT: phase (iState)                                            |
 //| OUTPUT: argument string list                                     |
@@ -1022,6 +1108,8 @@ QStringList SKMainWindow::slDLParamConstruct( int phase )
 	QStringList slArguments;
 
 	slArguments.clear();
+	if ( pMainShared == NULL )				// should not be possible
+		return slArguments;
 	slArguments.append( "-app");
 	slArguments.append( pMainShared->sAppID );
 	if ( TESTMODE )
@@ -1051,8 +1139,6 @@ QStringList SKMainWindow::slDLParamConstruct( int phase )
 void SKMainWindow::FinalizeDowngrade()
 {
 	//qDebug() << "FinalizeDowngrade started.";
-	if ( pProcessDL->state() == QProcess::Running )
-		pProcessDL->write( "exit\n" );
 	if ( pThreadControl == NULL )
 	{
 		ui->textEdit->append( tr( "Warning!  ThreadControl pointer is NULL!  Copying files the old way (program will become unresponsive for a while)." ) );
@@ -1062,7 +1148,8 @@ void SKMainWindow::FinalizeDowngrade()
 		return;
 	}
 	pMainShared->iState++;
-	emit pThreadControl->sendWorkerStartSignal( ui->lineEditDownloadPath->text(), ui->lineEditGamePath->text() );
+	//emit pThreadControl->sendWorkerStartSignal( ui->lineEditDownloadPath->text(), ui->lineEditGamePath->text() );
+	this->CopyFastPreparation();
 }
 
 //+------------------------------------------------------------------+
@@ -1076,5 +1163,95 @@ void SKMainWindow::FinalizeDowngrade2()
 	if ( pThreadControl == NULL )				// already finished in this case
 		return;
 	this->DeleteFiles();
+	this->EnableControls();pMainShared->iState = 0;
 	ui->textEdit->append( tr( "Downgrading finished.") );
+}
+
+//+------------------------------------------------------------------+
+//| Disable controls when worker process starts                      |
+//| INPUT: none                                                      |
+//| OUTPUT: none                                                     |
+//| REMARK: none                                                     |
+//+------------------------------------------------------------------+
+void SKMainWindow::DisableControls()
+{
+	ui->pushButtonAbort->setEnabled( true );
+	ui->comboBoxGame->setEnabled( false );ui->comboBoxVersion->setEnabled( false );
+	ui->pushButtonBrowse->setEnabled( false );ui->pushButtonBrowse2->setEnabled( false );
+}
+
+//+------------------------------------------------------------------+
+//| Enable controls after worker process is finished                 |
+//| INPUT: none                                                      |
+//| OUTPUT: none                                                     |
+//| REMARK: none                                                     |
+//+------------------------------------------------------------------+
+void SKMainWindow::EnableControls()
+{
+	ui->comboBoxGame->setEnabled( true );ui->comboBoxVersion->setEnabled( true );
+	ui->pushButtonBrowse->setEnabled( true );ui->pushButtonBrowse2->setEnabled( true );
+}
+
+//+------------------------------------------------------------------+
+//| Prepare file copying (fast method)                               |
+//| INPUT: download path (source), game path (dest)                  |
+//| OUTPUT: none                                                     |
+//| REMARK: separate process, no worker thread                       |
+//+------------------------------------------------------------------+
+void SKMainWindow::CopyFastPreparation()
+{
+	QStringList slArguments;
+	//qint32 i, j;
+	QString sFileNameSource, sFileNameTarget, sProcessCommand;
+
+	if ( pMainShared == NULL )
+	{
+		ui->textEdit->append( tr( "Critical ERROR!  Shared data pointer problem.  Fast copy would work but download didn't so..." ) );
+		return;
+	}
+	ui->textEdit->append( tr( "\nCopying files..." ) );pMainShared->iState = 0;
+#if OSTYPE == OSLINUX
+	sProcessCommand = "rsync";
+#elif OSTYPE == OSWINDOWS
+	sProcessCommand = "robocopy";
+#endif
+	slArguments = this->slCopyFastParamConstruct( pMainShared->iState++ );
+	pProcessCopyFast->start( sProcessCommand, slArguments );
+}
+
+//+------------------------------------------------------------------+
+//| Construct parameter string list for fast copy process            |
+//| INPUT: phase (iState)                                            |
+//| OUTPUT: argument string list                                     |
+//| REMARK: none                                                     |
+//+------------------------------------------------------------------+
+QStringList SKMainWindow::slCopyFastParamConstruct( int iPhase )
+{
+	QStringList slArguments;
+	QString sSourceDir, sTargetDir;
+
+	slArguments.clear();
+	if ( !iPhase )							// unnecessary but prevents warning (int paramenter is necessary for on_processStarted() )
+		;
+	if ( pMainShared == NULL )				// should not be possible
+		return slArguments;
+#if OSTYPE == OSLINUX
+	slArguments.append( "-av");
+	slArguments.append( "-r" );
+	slArguments << "--exclude=.DepotDownloader/*";
+	sSourceDir = ui->lineEditDownloadPath->text();
+	if ( !sSourceDir.endsWith( '/' ) )
+		sSourceDir.append( '/' );
+	sTargetDir = ui->lineEditGamePath->text();
+	if ( !sTargetDir.endsWith( '/' ) )
+		sTargetDir.append( '/' );
+	slArguments << sSourceDir << sTargetDir;
+#elif OSTYPE == OSWINDOWS
+	sSourceDir = ui->lineEditDownloadPath->text();
+	sTargetDir = ui->lineEditGamePath->text();
+	slArguments << sSourceDir << sTargetDir;
+	slArguments << "/s" << "/mt" << "/j";
+	slArguments.append( "/xd .DepotDownloader" );
+#endif
+	return slArguments;
 }

@@ -16,13 +16,13 @@ Subwindow::~Subwindow()
 
 void Subwindow::on_buttonBoxClicked(QAbstractButton *button)
 {
-	if ( button->text() == "OK" )
+	//qDebug() << "on_buttonBoxClicked: " << button->text();		// it works
+	if ( button->text() == "&OK" )
 	{
-		//qDebug() << "OK";
 		emit SubwinSendTextSignal( ui->lineEdit->text() );
 		ui->lineEdit->clear();
 	}
-	if ( button->text() == "Cancel" )
+	if ( button->text() == "&Cancel" )
 	{
 		emit SubwinCancelSignal();
 		ui->lineEdit->clear();
